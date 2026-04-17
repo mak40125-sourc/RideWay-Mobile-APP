@@ -1,0 +1,4 @@
+export const WALLET_MINIMUM = 50;
+export const RECHARGE_AMOUNTS = [100, 200, 500, 1000];
+export const RIDE_REQUEST_TIMEOUT = 10000;
+export const GPS_UPDATE_INTERVAL = 2000;

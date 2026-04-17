@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "rideway-rider",
-    "slug": "rideway-rider",
+    "name": "driver-app",
+    "slug": "driver-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "ridewayrider",
+    "scheme": "driverapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -38,9 +38,7 @@
             "backgroundColor": "#000000"
           }
         }
-      ],
-      "expo-font",
-      "expo-secure-store"
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
