@@ -1,16 +1,5 @@
 const { supabaseAdmin } = require('../config/supabase');
 
-exports.findNearbyDrivers = async (lat, lng, radius) => {
-  const { data, error } = await supabaseAdmin.rpc('get_nearby_drivers', {
-    rider_lat: lat,
-    rider_lon: lng,
-    radius_meters: radius,
-  });
-
-  if (error) throw error;
-  return data || [];
-};
-
 exports.getDriverByUserId = async (userId) => {
   const { data, error } = await supabaseAdmin
     .from('drivers')

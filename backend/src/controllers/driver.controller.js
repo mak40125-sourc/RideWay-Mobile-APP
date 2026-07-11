@@ -1,5 +1,5 @@
 const { supabaseAdmin } = require('../config/supabase');
-const redisClient = require('../config/redis');
+const redisService = require('../services/redis.service');
 const driverService = require('../services/driver.service');
 
 exports.updateLocation = async (req, res) => {
@@ -11,15 +11,7 @@ exports.updateLocation = async (req, res) => {
       return res.status(400).json({ error: 'Valid location (latitude, longitude) is required' });
     }
 
-    const { error } = await supabaseAdmin.rpc('update_driver_location', {
-      p_user_id: userId,
-      p_latitude: location.latitude,
-      p_longitude: location.longitude,
-    });
-
-    if (error) throw error;
-
-    await redisClient.set(`driver:location:${userId}`, JSON.stringify(location), 'EX', 60);
+    await redisService.setDriverLocation(userId, location.latitude, location.longitude);
 
     res.status(200).json({ message: 'Location updated' });
   } catch (error) {
@@ -29,17 +21,14 @@ exports.updateLocation = async (req, res) => {
 
 exports.setOnline = async (req, res) => {
   try {
-    const { isOnline } = req.body;
+    const { isOnline, rideType, vehicleNumber } = req.body;
     const userId = req.user.id;
 
-    const { error } = await supabaseAdmin
-      .from('drivers')
-      .update({ is_online: isOnline, updated_at: new Date().toISOString() })
-      .eq('user_id', userId);
-
-    if (error) throw error;
-
-    await redisClient.set(`driver:online:${userId}`, isOnline ? '1' : '0');
+    if (isOnline) {
+      await redisService.setDriverOnline(userId, { rideType, vehicleNumber });
+    } else {
+      await redisService.setDriverOffline(userId);
+    }
 
     res.status(200).json({ message: `Driver is now ${isOnline ? 'online' : 'offline'}` });
   } catch (error) {
@@ -55,7 +44,7 @@ exports.getNearbyDrivers = async (req, res) => {
       return res.status(400).json({ error: 'lat and lng query parameters are required' });
     }
 
-    const drivers = await driverService.findNearbyDrivers(
+    const drivers = await redisService.getNearbyDrivers(
       parseFloat(lat),
       parseFloat(lng),
       parseFloat(radius)

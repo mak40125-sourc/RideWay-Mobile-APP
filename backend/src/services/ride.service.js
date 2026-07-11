@@ -1,42 +1,31 @@
 const crypto = require('crypto');
 const { supabaseAdmin } = require('../config/supabase');
-const redisClient = require('../config/redis');
-const driverService = require('./driver.service');
-
-const RIDE_REQUEST_TTL = 120;
+const redisService = require('./redis.service');
 
 const createRideRequest = async (riderId, pickup, dropoff, fare, distance, duration, vehicleType) => {
   const rideId = crypto.randomUUID();
 
-  const rideData = {
+  await redisService.createRideRequest(rideId, {
     riderId,
-    pickupLat: String(pickup.lat),
-    pickupLng: String(pickup.lng),
+    pickupLat: pickup.lat,
+    pickupLng: pickup.lng,
     pickupAddress: pickup.address || '',
-    dropLat: String(dropoff.lat),
-    dropLng: String(dropoff.lng),
+    dropLat: dropoff.lat,
+    dropLng: dropoff.lng,
     dropAddress: dropoff.address || '',
-    fare: String(fare),
-    distance: String(distance),
-    duration: String(duration),
+    fare,
+    distance,
+    duration,
     vehicleType,
-    status: 'REQUESTED',
-    createdAt: String(Date.now()),
-  };
+  });
 
-  const redisKey = `ride:request:${rideId}`;
-  await redisClient.hset(redisKey, rideData);
-  await redisClient.expire(redisKey, RIDE_REQUEST_TTL);
-
-  const nearbyDrivers = await driverService.findNearbyDrivers(pickup.lat, pickup.lng, 3000);
+  const nearbyDrivers = await redisService.getNearbyDrivers(pickup.lat, pickup.lng, 3000);
   const candidates = nearbyDrivers.filter((d) => d.vehicle_type === vehicleType);
   const candidateCount = candidates.length;
 
   if (candidateCount > 0) {
     const candidateIds = candidates.map((d) => d.user_id);
-    const queueKey = `matching:queue:${rideId}`;
-    await redisClient.sadd(queueKey, ...candidateIds);
-    await redisClient.expire(queueKey, RIDE_REQUEST_TTL);
+    await redisService.addDriversToQueue(rideId, candidateIds);
 
     let riderName = 'Rider';
     try {
@@ -49,7 +38,7 @@ const createRideRequest = async (riderId, pickup, dropoff, fare, distance, durat
     } catch {
     }
 
-    const notification = JSON.stringify({
+    await redisService.publishNotification('ride:notifications', {
       rideId,
       pickup: { lat: pickup.lat, lng: pickup.lng, address: pickup.address || '' },
       dropoff: { lat: dropoff.lat, lng: dropoff.lng, address: dropoff.address || '' },
@@ -59,27 +48,21 @@ const createRideRequest = async (riderId, pickup, dropoff, fare, distance, durat
       riderName,
       candidateDriverIds: candidateIds,
     });
-
-    await redisClient.publish('ride:notifications', notification);
   }
 
   return { rideId, candidateCount };
 };
 
 const acceptRide = async (rideId, driverId) => {
-  const lockKey = `ride:lock:${rideId}`;
-  const acquired = await redisClient.set(lockKey, driverId, 'NX', 'EX', 10);
-
+  const acquired = await redisService.acquireRideLock(rideId, driverId, 10);
   if (!acquired) {
     throw new Error('Ride already accepted by another driver.');
   }
 
   try {
-    const redisKey = `ride:request:${rideId}`;
-    const rideData = await redisClient.hgetall(redisKey);
-
-    if (!rideData || !rideData.riderId) {
-      await redisClient.del(lockKey);
+    const rideData = await redisService.getRideRequest(rideId);
+    if (!rideData) {
+      await redisService.releaseRideLock(rideId);
       throw new Error('Ride request expired or no longer available.');
     }
 
@@ -99,17 +82,17 @@ const acceptRide = async (rideId, driverId) => {
     });
 
     if (error || !ride) {
-      await redisClient.del(lockKey);
+      await redisService.releaseRideLock(rideId);
       throw new Error('Failed to persist ride acceptance.');
     }
 
-    await redisClient.del(redisKey);
-    await redisClient.del(`matching:queue:${rideId}`);
-    await redisClient.del(lockKey);
+    await redisService.deleteRideRequest(rideId);
+    await redisService.deleteQueue(rideId);
+    await redisService.releaseRideLock(rideId);
 
     return Array.isArray(ride) ? ride[0] : ride;
   } catch (err) {
-    await redisClient.del(lockKey);
+    await redisService.releaseRideLock(rideId);
     throw err;
   }
 };
