@@ -1,24 +1,48 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Alert } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useDriverStore } from '../../store/driverStore';
 import { useRideStore } from '../../store/rideStore';
+import { rideAPI } from '../../services/rideAPI';
 import { colors, spacing, borderRadius, fontSize, fontWeight } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
+
+function getCoords(loc: any) {
+  if (loc?.latitude != null) return { latitude: loc.latitude, longitude: loc.longitude };
+  if (loc?.lat != null) return { latitude: loc.lat, longitude: loc.lng };
+  return { latitude: 12.9716, longitude: 77.5946 };
+}
+
+function getAddress(loc: any): string {
+  return loc?.address || 'Loading...';
+}
 
 export default function PickupNavigationScreen() {
   const router = useRouter();
   const { setStatus } = useDriverStore();
   const { current_request, current_ride } = useRideStore();
+  const [arriving, setArriving] = useState(false);
 
-  const pickup = current_request?.pickup || current_ride?.pickup_location;
+  const ride = current_ride;
+  const rideId = ride?.id || current_request?.rideId;
+  const pickup = current_request?.pickup || ride?.pickup_location;
+  const pickupAddress = getAddress(pickup);
+  const coords = getCoords(pickup);
 
-  const handleArrived = () => {
-    setStatus('ARRIVED_AT_PICKUP');
-    router.push('/(driver)/ride-progress');
+  const handleArrived = async () => {
+    if (!rideId || arriving) return;
+    setArriving(true);
+    try {
+      await rideAPI.updateRideStatus(rideId, 'DRIVER_ARRIVING');
+      setStatus('ARRIVED_AT_PICKUP');
+      router.push('/(driver)/ride-progress');
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to update status');
+      setArriving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -33,21 +57,19 @@ export default function PickupNavigationScreen() {
         provider={PROVIDER_GOOGLE}
         showsUserLocation
         initialRegion={{
-          latitude: pickup?.latitude || 12.9716,
-          longitude: pickup?.longitude || 77.5946,
+          latitude: coords.latitude,
+          longitude: coords.longitude,
           latitudeDelta: 0.02,
           longitudeDelta: 0.02,
         }}
       >
-        {pickup && (
-          <Marker coordinate={pickup} title="Pickup Location" />
-        )}
+        <Marker coordinate={coords} title="Pickup Location" />
       </MapView>
 
       <View style={styles.topOverlay}>
         <View style={styles.routeInfo}>
-          <Text style={styles.instruction}>Turn right onto MG Road</Text>
-          <Text style={styles.eta}>2 min · 800 m</Text>
+          <Text style={styles.instruction}>Navigate to pickup</Text>
+          <Text style={styles.eta}>{current_request?.distance} km away</Text>
         </View>
       </View>
 
@@ -56,7 +78,7 @@ export default function PickupNavigationScreen() {
           <View style={styles.dot} />
           <View style={styles.addressInfo}>
             <Text style={styles.label}>Pickup</Text>
-            <Text style={styles.address}>{pickup?.address || 'Loading...'}</Text>
+            <Text style={styles.address}>{pickupAddress}</Text>
           </View>
         </View>
 
@@ -65,14 +87,18 @@ export default function PickupNavigationScreen() {
             <Ionicons name="call-outline" size={18} color={colors.text} style={{ marginRight: 6 }} />
             <Text style={styles.callText}>Call Rider</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.arrivedButton} onPress={handleArrived}>
-          <Text style={styles.arrivedText}>Arrived</Text>
+        <TouchableOpacity
+          style={[styles.arrivedButton, arriving && styles.buttonDisabled]}
+          onPress={handleArrived}
+          disabled={arriving}
+        >
+          <Text style={styles.arrivedText}>{arriving ? 'Updating...' : 'Arrived'}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -183,6 +209,9 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     paddingVertical: spacing.md,
     alignItems: 'center',
+  },
+  buttonDisabled: {
+    opacity: 0.5,
   },
   arrivedText: {
     fontSize: fontSize.lg,

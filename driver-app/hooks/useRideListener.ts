@@ -1,27 +1,43 @@
 import { useEffect, useRef } from 'react';
 import { useRideStore } from '../store/rideStore';
 import { useDriverStore } from '../store/driverStore';
+import { useWebSocket } from './useWebSocket';
 import { rideAPI } from '../services/rideAPI';
 
-export const useRideListener = () => {
+interface UseRideListenerOptions {
+  onRequest?: () => void;
+  onRideUpdate?: () => void;
+}
+
+export const useRideListener = (options?: UseRideListenerOptions) => {
   const { setCurrentRequest, setCurrentRide, clearRide } = useRideStore();
   const { is_online, status, driver } = useDriverStore();
-  const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
+  const currentRideIdRef = useRef<string | null>(null);
+
+  useWebSocket({
+    onRideRequest: (request) => {
+      if (is_online && status === 'ONLINE_IDLE' && driver) {
+        setCurrentRequest(request);
+        options?.onRequest?.();
+      }
+    },
+  });
 
   useEffect(() => {
-    if (is_online && status === 'ONLINE_IDLE' && driver) {
-      subscriptionRef.current = rideAPI.subscribeToRideRequests((request) => {
-        setCurrentRequest(request);
-      });
-    }
+    const rideId = useRideStore.getState().current_ride?.id;
+    if (rideId && rideId !== currentRideIdRef.current) {
+      currentRideIdRef.current = rideId;
 
-    return () => {
-      if (subscriptionRef.current) {
-        subscriptionRef.current.unsubscribe();
-        subscriptionRef.current = null;
-      }
-    };
-  }, [is_online, status, driver]);
+      const sub = rideAPI.subscribeToRideUpdates(rideId, (updatedRide) => {
+        setCurrentRide(updatedRide);
+        options?.onRideUpdate?.();
+      });
+
+      return () => {
+        sub.unsubscribe();
+      };
+    }
+  }, []);
 
   return { clearRide };
 };

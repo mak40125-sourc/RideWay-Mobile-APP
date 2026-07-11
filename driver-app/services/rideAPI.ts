@@ -1,41 +1,46 @@
+import { api } from './api';
 import { supabase } from '../lib/supabase';
-import type { Ride, RideRequest } from '../types/ride';
+import type { Ride, RideStatus } from '../types/ride';
+
+function transformRide(raw: any): Ride {
+  const coords = (loc: any) => ({
+    latitude: loc?.coordinates?.[1] ?? loc?.latitude ?? 0,
+    longitude: loc?.coordinates?.[0] ?? loc?.longitude ?? 0,
+  });
+
+  return {
+    id: raw.id,
+    rider_id: raw.rider_id,
+    driver_id: raw.driver_id ?? null,
+    status: raw.status as RideStatus,
+    pickup_location: coords(raw.pickup_location),
+    drop_location: coords(raw.drop_location),
+    fare: Number(raw.fare),
+    distance: Number(raw.distance),
+    duration: Number(raw.duration),
+    created_at: raw.created_at,
+    updated_at: raw.updated_at,
+  };
+}
 
 export const rideAPI = {
-  acceptRide: async (rideId: string, driverId: string) => {
-    return supabase
-      .from('rides')
-      .update({ driver_id: driverId, status: 'ACCEPTED' })
-      .eq('id', rideId);
+  acceptRide: async (rideId: string): Promise<Ride> => {
+    const raw = await api.post<any>(`/rides/${rideId}/accept`);
+    return transformRide(raw);
   },
 
-  updateRideStatus: async (rideId: string, status: string) => {
-    return supabase
-      .from('rides')
-      .update({ status })
-      .eq('id', rideId);
+  updateRideStatus: async (rideId: string, status: string): Promise<Ride> => {
+    const raw = await api.put<any>(`/rides/${rideId}/status`, { status });
+    return transformRide(raw);
   },
 
   getRideDetails: async (rideId: string): Promise<Ride | null> => {
-    const { data } = await supabase
-      .from('rides')
-      .select('*')
-      .eq('id', rideId)
-      .single();
-    return data;
-  },
-
-  subscribeToRideRequests: (callback: (request: RideRequest) => void) => {
-    return supabase
-      .channel('ride-requests')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'ride_requests' },
-        (payload) => {
-          callback(payload.new as RideRequest);
-        }
-      )
-      .subscribe();
+    try {
+      const raw = await api.get<any>(`/rides/${rideId}`);
+      return transformRide(raw);
+    } catch {
+      return null;
+    }
   },
 
   subscribeToRideUpdates: (rideId: string, callback: (ride: Ride) => void) => {
@@ -50,7 +55,7 @@ export const rideAPI = {
           filter: `id=eq.${rideId}`,
         },
         (payload) => {
-          callback(payload.new as Ride);
+          callback(transformRide(payload.new));
         }
       )
       .subscribe();

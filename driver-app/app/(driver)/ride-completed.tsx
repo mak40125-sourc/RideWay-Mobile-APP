@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -11,7 +10,7 @@ export default function RideCompletedScreen() {
   const { setStatus, earnings_today, setEarningsToday } = useDriverStore();
   const { current_ride, clearRide } = useRideStore();
 
-  const fare = current_ride?.estimated_fare || 200;
+  const fare = current_ride?.fare || 0;
   const commission = 0;
   const earnings = fare;
 

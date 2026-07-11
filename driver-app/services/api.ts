@@ -107,6 +107,10 @@ async function request<T>(
   return response.json() as Promise<T>;
 }
 
+export function getWebSocketUrl(): string {
+  return API_BASE_URL.replace(/\/api\/v1$/, '').replace(/^http/, 'ws');
+}
+
 export const api = {
   get: <T>(endpoint: string) => request<T>(endpoint, { method: "GET" }),
   post: <T>(endpoint: string, body: unknown) => request<T>(endpoint, { method: "POST", body }),

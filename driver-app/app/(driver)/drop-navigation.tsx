@@ -1,25 +1,42 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Alert } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useRouter } from 'expo-router';
 import { useDriverStore } from '../../store/driverStore';
 import { useRideStore } from '../../store/rideStore';
+import { rideAPI } from '../../services/rideAPI';
 import { colors, spacing, borderRadius, fontSize, fontWeight } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
+
+function getCoords(loc: any) {
+  if (loc?.latitude != null) return { latitude: loc.latitude, longitude: loc.longitude };
+  if (loc?.lat != null) return { latitude: loc.lat, longitude: loc.lng };
+  return { latitude: 12.9352, longitude: 77.6245 };
+}
 
 export default function DropNavigationScreen() {
   const router = useRouter();
   const { setStatus } = useDriverStore();
   const { current_ride } = useRideStore();
-  const drop = current_ride?.drop_location;
-  const fare = current_ride?.estimated_fare || 200;
+  const [completing, setCompleting] = useState(false);
 
-  const handleCompleteRide = () => {
-    // In production: POST /rides/:id/complete
-    // Backend deducts commission and updates wallet
-    setStatus('RIDE_COMPLETED');
-    router.push('/(driver)/ride-completed');
+  const drop = current_ride?.drop_location;
+  const rideId = current_ride?.id;
+  const fare = current_ride?.fare || 0;
+  const dropAddress = current_ride?.drop_location?.address || current_ride?.drop_address || 'Loading...';
+
+  const handleCompleteRide = async () => {
+    if (!rideId || completing) return;
+    setCompleting(true);
+    try {
+      await rideAPI.updateRideStatus(rideId, 'RIDE_COMPLETED');
+      setStatus('RIDE_COMPLETED');
+      router.push('/(driver)/ride-completed');
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to complete ride');
+      setCompleting(false);
+    }
   };
 
   return (
@@ -29,19 +46,19 @@ export default function DropNavigationScreen() {
         provider={PROVIDER_GOOGLE}
         showsUserLocation
         initialRegion={{
-          latitude: drop?.latitude || 12.9352,
-          longitude: drop?.longitude || 77.6245,
+          latitude: getCoords(drop).latitude,
+          longitude: getCoords(drop).longitude,
           latitudeDelta: 0.02,
           longitudeDelta: 0.02,
         }}
       >
-        {drop && <Marker coordinate={drop} title="Drop Location" />}
+        {drop && <Marker coordinate={getCoords(drop)} title="Drop Location" />}
       </MapView>
 
       <View style={styles.topOverlay}>
         <View style={styles.routeInfo}>
           <Text style={styles.instruction}>Continue to destination</Text>
-          <Text style={styles.eta}>5 min · 2.3 km</Text>
+          <Text style={styles.eta}>{current_ride?.distance} km · {current_ride?.duration} min</Text>
         </View>
       </View>
 
@@ -50,17 +67,21 @@ export default function DropNavigationScreen() {
           <View style={[styles.dot, styles.dotDrop]} />
           <View style={styles.addressInfo}>
             <Text style={styles.label}>Drop-off</Text>
-            <Text style={styles.address}>{drop?.address || 'Loading...'}</Text>
+            <Text style={styles.address}>{dropAddress}</Text>
           </View>
         </View>
 
         <View style={styles.fareInfo}>
-          <Text style={styles.fareLabel}>Estimated Fare</Text>
+          <Text style={styles.fareLabel}>Fare</Text>
           <Text style={styles.fareValue}>₹{fare}</Text>
         </View>
 
-        <TouchableOpacity style={styles.completeButton} onPress={handleCompleteRide}>
-          <Text style={styles.completeText}>Complete Ride</Text>
+        <TouchableOpacity
+          style={[styles.completeButton, completing && styles.buttonDisabled]}
+          onPress={handleCompleteRide}
+          disabled={completing}
+        >
+          <Text style={styles.completeText}>{completing ? 'Completing...' : 'Complete Ride'}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -164,6 +185,9 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     paddingVertical: spacing.md,
     alignItems: 'center',
+  },
+  buttonDisabled: {
+    opacity: 0.5,
   },
   completeText: {
     fontSize: fontSize.lg,

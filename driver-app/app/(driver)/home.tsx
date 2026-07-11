@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useDriverStore } from '../../store/driverStore';
 import { useWalletStore } from '../../store/walletStore';
 import { useDriverLocation } from '../../hooks/useDriverLocation';
+import { useRideListener } from '../../hooks/useRideListener';
 import { useAuth } from '../../contexts/AuthContext';
 import { driverAPI } from '../../services/driverAPI';
 import DriverStatusCard from '../../components/driver/DriverStatusCard';
@@ -73,6 +74,12 @@ export default function DriverHomeScreen() {
       stopTracking();
     }
   }, [is_online, isTracking, startTracking, stopTracking]);
+
+  useRideListener({
+    onRequest: () => {
+      router.push('/(modals)/ride-request');
+    },
+  });
 
   const handleToggleOnline = useCallback((online: boolean) => {
     setOnline(online);

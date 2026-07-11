@@ -1,25 +1,42 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Alert } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useRouter } from 'expo-router';
 import { useDriverStore } from '../../store/driverStore';
 import { useRideStore } from '../../store/rideStore';
+import { rideAPI } from '../../services/rideAPI';
 import { colors, spacing, borderRadius, fontSize, fontWeight } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
+
+function getCoords(loc: any) {
+  if (loc?.latitude != null) return { latitude: loc.latitude, longitude: loc.longitude };
+  if (loc?.lat != null) return { latitude: loc.lat, longitude: loc.lng };
+  return { latitude: 12.9716, longitude: 77.5946 };
+}
 
 export default function RideProgressScreen() {
   const router = useRouter();
   const { setStatus } = useDriverStore();
   const { current_ride } = useRideStore();
-  const [otp, setOtp] = useState('');
+  const [starting, setStarting] = useState(false);
 
   const pickup = current_ride?.pickup_location;
   const drop = current_ride?.drop_location;
+  const rideId = current_ride?.id;
+  const dropAddress = current_ride?.drop_location?.address || current_ride?.pickup_address || 'Loading...';
 
-  const handleStartRide = () => {
-    setStatus('RIDE_STARTED');
-    router.push('/(driver)/drop-navigation');
+  const handleStartRide = async () => {
+    if (!rideId || starting) return;
+    setStarting(true);
+    try {
+      await rideAPI.updateRideStatus(rideId, 'RIDE_STARTED');
+      setStatus('NAVIGATING_TO_DROP');
+      router.push('/(driver)/drop-navigation');
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to start ride');
+      setStarting(false);
+    }
   };
 
   return (
@@ -29,41 +46,30 @@ export default function RideProgressScreen() {
         provider={PROVIDER_GOOGLE}
         showsUserLocation
         initialRegion={{
-          latitude: pickup?.latitude || 12.9716,
-          longitude: pickup?.longitude || 77.5946,
+          latitude: getCoords(pickup).latitude,
+          longitude: getCoords(pickup).longitude,
           latitudeDelta: 0.02,
           longitudeDelta: 0.02,
         }}
       >
-        {pickup && <Marker coordinate={pickup} title="Pickup" />}
-        {drop && <Marker coordinate={drop} title="Drop" />}
+        {pickup && <Marker coordinate={getCoords(pickup)} title="Pickup" />}
+        {drop && <Marker coordinate={getCoords(drop)} title="Drop" pinColor="red" />}
       </MapView>
 
       <View style={styles.bottomCard}>
         <Text style={styles.title}>Rider has boarded</Text>
-        
-        <View style={styles.otpContainer}>
-          <Text style={styles.otpLabel}>Enter OTP to start ride</Text>
-          <View style={styles.otpInputs}>
-            {[0, 1, 2, 3].map((i) => (
-              <View key={i} style={styles.otpBox}>
-                <Text style={styles.otpText}>{otp[i] || ''}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
 
         <View style={styles.info}>
           <Text style={styles.infoLabel}>Trip to</Text>
-          <Text style={styles.infoAddress}>{drop?.address || 'Loading...'}</Text>
+          <Text style={styles.infoAddress}>{dropAddress}</Text>
         </View>
 
-        <TouchableOpacity 
-          style={[styles.startButton, otp.length < 4 && styles.buttonDisabled]} 
+        <TouchableOpacity
+          style={[styles.startButton, starting && styles.buttonDisabled]}
           onPress={handleStartRide}
-          disabled={otp.length < 4}
+          disabled={starting}
         >
-          <Text style={styles.startText}>Start Ride</Text>
+          <Text style={styles.startText}>{starting ? 'Starting...' : 'Start Ride'}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -96,32 +102,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     textAlign: 'center',
     marginBottom: spacing.lg,
-  },
-  otpContainer: {
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
-  otpLabel: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-  },
-  otpInputs: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  otpBox: {
-    width: 50,
-    height: 50,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  otpText: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
   },
   info: {
     backgroundColor: colors.surface,

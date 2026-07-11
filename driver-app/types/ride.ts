@@ -1,9 +1,9 @@
-export type RideStatus = 
-  | 'PENDING'
-  | 'ACCEPTED'
-  | 'ARRIVED'
-  | 'STARTED'
-  | 'COMPLETED'
+export type RideStatus =
+  | 'REQUESTED'
+  | 'DRIVER_ASSIGNED'
+  | 'DRIVER_ARRIVING'
+  | 'RIDE_STARTED'
+  | 'RIDE_COMPLETED'
   | 'CANCELLED';
 
 export interface Location {
@@ -15,29 +15,23 @@ export interface Location {
 export interface Ride {
   id: string;
   rider_id: string;
-  driver_id: string;
+  driver_id: string | null;
   status: RideStatus;
   pickup_location: Location;
   drop_location: Location;
-  estimated_fare: number;
-  actual_fare?: number;
-  distance_km?: number;
-  duration_minutes?: number;
-  rider_name?: string;
-  rider_phone?: string;
-  rider_rating?: number;
+  fare: number;
+  distance: number;
+  duration: number;
   created_at: string;
-  started_at?: string;
-  completed_at?: string;
+  updated_at: string;
 }
 
 export interface RideRequest {
-  id: string;
-  pickup: Location;
-  drop: Location;
-  estimated_fare: number;
-  distance_km: number;
-  rider_name: string;
-  rider_rating: number;
-  expires_at: number;
+  rideId: string;
+  pickup: { lat: number; lng: number; address: string };
+  dropoff: { lat: number; lng: number; address: string };
+  fare: number;
+  distance: number;
+  duration: number;
+  riderName: string;
 }
