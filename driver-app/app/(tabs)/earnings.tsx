@@ -2,21 +2,14 @@ import { View, Text, StyleSheet, FlatList } from 'react-native';
 import { useDriverStore } from '../../store/driverStore';
 import { colors, spacing, borderRadius, fontSize, fontWeight } from '../../constants/theme';
 
-const mockWeeklyEarnings = [
-  { day: 'Mon', amount: 450 },
-  { day: 'Tue', amount: 320 },
-  { day: 'Wed', amount: 580 },
-  { day: 'Thu', amount: 410 },
-  { day: 'Fri', amount: 620 },
-  { day: 'Sat', amount: 780 },
-  { day: 'Sun', amount: 390 },
-];
+// In production: fetch weekly earnings from backend
+const weeklyDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export default function EarningsScreen() {
   const { earnings_today } = useDriverStore();
 
-  const weeklyTotal = mockWeeklyEarnings.reduce((sum, d) => sum + d.amount, 0);
-  const averageDaily = Math.round(weeklyTotal / 7);
+  const weeklyTotal = 0;
+  const averageDaily = 0;
 
   return (
     <View style={styles.container}>
@@ -43,10 +36,10 @@ export default function EarningsScreen() {
       <View style={styles.weeklySection}>
         <Text style={styles.sectionTitle}>This Week</Text>
         <View style={styles.weeklyChart}>
-          {mockWeeklyEarnings.map((item, index) => (
+          {weeklyDays.map((day, index) => (
             <View key={index} style={styles.barContainer}>
-              <View style={[styles.bar, { height: (item.amount / 800) * 100 }]} />
-              <Text style={styles.barLabel}>{item.day}</Text>
+              <View style={styles.bar} />
+              <Text style={styles.barLabel}>{day}</Text>
             </View>
           ))}
         </View>
@@ -130,6 +123,7 @@ const styles = StyleSheet.create({
   },
   bar: {
     width: 30,
+    height: 4,
     backgroundColor: colors.accent,
     borderRadius: 4,
     marginBottom: spacing.xs,

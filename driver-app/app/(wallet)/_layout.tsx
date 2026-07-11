@@ -5,6 +5,7 @@ export default function WalletLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="wallet" />
       <Stack.Screen name="recharge" />
+      <Stack.Screen name="transactions" />
     </Stack>
   );
 }

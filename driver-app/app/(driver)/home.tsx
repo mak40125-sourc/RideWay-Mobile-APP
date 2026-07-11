@@ -1,25 +1,70 @@
-import { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Dimensions, TouchableOpacity, Text } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { View, StyleSheet, ActivityIndicator, Text, Dimensions, ScrollView } from 'react-native';
+import MapView from 'react-native-maps';
+import { useRouter } from 'expo-router';
 import { useDriverStore } from '../../store/driverStore';
 import { useWalletStore } from '../../store/walletStore';
-import { useRideStore } from '../../store/rideStore';
 import { useDriverLocation } from '../../hooks/useDriverLocation';
+import { useAuth } from '../../contexts/AuthContext';
+import { driverAPI } from '../../services/driverAPI';
+import DriverStatusCard from '../../components/driver/DriverStatusCard';
 import OnlineToggle from '../../components/driver/OnlineToggle';
 import EarningsCard from '../../components/driver/EarningsCard';
-import RideRequestModal from '../../components/ride/RideRequestModal';
-import { colors, spacing } from '../../constants/theme';
+import RideStatusCard from '../../components/driver/RideStatusCard';
+import WalletWarning from '../../components/wallet/WalletWarning';
+import { colors } from '../../constants/theme';
+import { WALLET_MINIMUM } from '../../constants/wallet';
 
-const { width, height } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const BOTTOM_PANEL_HEIGHT = SCREEN_HEIGHT * 0.35;
 
 export default function DriverHomeScreen() {
+  const router = useRouter();
   const mapRef = useRef<MapView>(null);
-  const { is_online, setOnline, status, setStatus, driver } = useDriverStore();
+  const { driver, is_online, setDriver, setOnline, setStatus } = useDriverStore();
   const { balance } = useWalletStore();
-  const { current_request, setCurrentRequest, clearRide } = useRideStore();
   const { startTracking, stopTracking, isTracking } = useDriverLocation();
+  const { user } = useAuth();
+  const [fetching, setFetching] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [initialRegion] = useState({
+    latitude: 12.9716,
+    longitude: 77.5946,
+    latitudeDelta: 0.05,
+    longitudeDelta: 0.05,
+  });
 
-  const [showRequest, setShowRequest] = useState(false);
+  const fetchData = useCallback(() => {
+    if (!user) return;
+    setFetching(true);
+    setFetchError(null);
+    driverAPI.getMyProfile()
+      .then((profile) => {
+        setDriver(profile);
+      })
+      .catch((err) => {
+        if (err instanceof Error && err.message.includes('404')) {
+          router.replace('/(auth)/kyc');
+          return;
+        }
+        setFetchError(err instanceof Error ? err.message : 'Failed to load profile');
+      })
+      .finally(() => {
+        setFetching(false);
+      });
+  }, [user, router, setDriver]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    if (fetching || !driver) return;
+    if (driver.kyc_status !== 'verified' || !driver.is_verified) {
+      router.replace('/(auth)/registration-pending');
+    }
+  }, [fetching, driver, router]);
 
   useEffect(() => {
     if (is_online && !isTracking) {
@@ -27,75 +72,80 @@ export default function DriverHomeScreen() {
     } else if (!is_online && isTracking) {
       stopTracking();
     }
-  }, [is_online]);
+  }, [is_online, isTracking, startTracking, stopTracking]);
 
-  const handleToggleOnline = (online: boolean) => {
+  const handleToggleOnline = useCallback((online: boolean) => {
     setOnline(online);
     setStatus(online ? 'ONLINE_IDLE' : 'OFFLINE');
-  };
-
-  const handleAcceptRide = () => {
-    setStatus('ACCEPTED');
-    setShowRequest(false);
-  };
-
-  const handleRejectRide = () => {
-    clearRide();
-    setShowRequest(false);
-  };
-
-  useEffect(() => {
-    if (is_online && Math.random() > 0.7) {
-      setTimeout(() => {
-        setCurrentRequest({
-          id: 'req-1',
-          pickup: { latitude: 12.9716, longitude: 77.5946, address: 'MG Road, Bangalore' },
-          drop: { latitude: 12.9352, longitude: 77.6245, address: 'Koramangala, Bangalore' },
-          estimated_fare: 180,
-          distance_km: 5.2,
-          rider_name: 'John Doe',
-          rider_rating: 4.8,
-          expires_at: Date.now() + 10000,
-        });
-        setShowRequest(true);
-      }, 3000);
+    if (online) {
+      driverAPI.setOnline().catch(() => {});
+    } else {
+      driverAPI.setOffline().catch(() => {});
     }
-  }, [is_online]);
+  }, [setOnline, setStatus]);
+
+  if (fetching) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.errorText}>{fetchError}</Text>
+        <Text style={styles.retryText} onPress={fetchData}>Tap to retry</Text>
+      </View>
+    );
+  }
+
+  if (!driver) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (driver.kyc_status === 'verified' && driver.is_verified) {
+    return (
+      <View style={styles.container}>
+        <MapView
+          ref={mapRef}
+          style={styles.map}
+          showsUserLocation
+          showsMyLocationButton={false}
+          initialRegion={initialRegion}
+        />
+
+        <View style={styles.overlayHeader}>
+          <OnlineToggle onToggle={handleToggleOnline} />
+        </View>
+
+        <View style={styles.bottomPanel}>
+          <View style={styles.handle} />
+          <ScrollView
+            style={styles.panelScroll}
+            contentContainerStyle={styles.panelContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <DriverStatusCard onToggle={handleToggleOnline} />
+            <View style={styles.midSection}>
+              <EarningsCard />
+              <RideStatusCard />
+              {balance < WALLET_MINIMUM && <WalletWarning balance={balance} />}
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.container}>
-      <MapView
-        ref={mapRef}
-        style={styles.map}
-        provider={PROVIDER_GOOGLE}
-        showsUserLocation
-        showsMyLocationButton={false}
-        initialRegion={{
-          latitude: 12.9716,
-          longitude: 77.5946,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        }}
-      />
-
-      <View style={styles.topSection}>
-        <OnlineToggle onToggle={handleToggleOnline} />
-        <EarningsCard />
-      </View>
-
-      {is_online && status === 'ONLINE_IDLE' && (
-        <View style={styles.idleCard}>
-          <Text style={styles.idleText}>Waiting for ride requests...</Text>
-        </View>
-      )}
-
-      {showRequest && current_request && (
-        <RideRequestModal
-          request={current_request}
-          onAccept={handleAcceptRide}
-          onReject={handleRejectRide}
-        />
-      )}
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color={colors.primary} />
     </View>
   );
 }
@@ -105,37 +155,67 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  map: {
-    width: width,
-    height: height,
-    position: 'absolute',
-    top: 0,
-    left: 0,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
   },
-  topSection: {
+  map: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  overlayHeader: {
     position: 'absolute',
-    top: 50,
-    left: 0,
-    right: 0,
+    top: 60,
+    right: 20,
     zIndex: 10,
   },
-  idleCard: {
-    position: 'absolute',
-    bottom: 100,
-    left: spacing.md,
-    right: spacing.md,
-    backgroundColor: colors.background,
-    padding: spacing.md,
-    borderRadius: 12,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  idleText: {
+  errorText: {
     fontSize: 16,
     color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 8,
+    fontFamily: 'NeueMontreal-Regular',
+  },
+  retryText: {
+    fontSize: 16,
+    color: colors.primary,
+    fontWeight: '600',
+    fontFamily: 'NeueMontreal-Bold',
+  },
+  bottomPanel: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: BOTTOM_PANEL_HEIGHT,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#D1D5DB',
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  panelScroll: {
+    flex: 1,
+  },
+  panelContent: {
+    paddingBottom: 32,
+  },
+  midSection: {
+    marginTop: 16,
+    gap: 12,
+    paddingHorizontal: 16,
   },
 });

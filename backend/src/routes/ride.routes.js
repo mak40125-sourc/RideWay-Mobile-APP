@@ -5,6 +5,7 @@ const { protect } = require('../middleware/auth.middleware');
 
 router.post('/request', protect, rideController.requestRide);
 router.post('/:rideId/accept', protect, rideController.acceptRide);
+router.put('/:rideId/status', protect, rideController.updateRideStatus);
 router.get('/:rideId', protect, rideController.getRide);
 router.post('/:rideId/complete', protect, rideController.completeRide);
 router.post('/:rideId/cancel', protect, rideController.cancelRide);

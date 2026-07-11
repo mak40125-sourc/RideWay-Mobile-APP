@@ -30,26 +30,8 @@ export function RideOptionsSheet({
     minute: "2-digit",
   });
 
-  const getOptionMeta = (label: string) => {
-    const normalized = label.toLowerCase();
-
-    if (normalized.includes("bike") || normalized.includes("dash")) {
-      return { icon: "BK", eta: "2 min away" };
-    }
-
-    if (normalized.includes("auto")) {
-      return { icon: "AU", eta: "3 min away" };
-    }
-
-    if (normalized.includes("premium") || normalized.includes("comfort")) {
-      return { icon: "PR", eta: "5 min away" };
-    }
-
-    if (normalized.includes("mega") || normalized.includes("xl")) {
-      return { icon: "XL", eta: "6 min away" };
-    }
-
-    return { icon: "CB", eta: "4 min away" };
+  const getOptionIcon = (label: string) => {
+    return label.slice(0, 2).toUpperCase();
   };
 
   return (
@@ -57,7 +39,7 @@ export function RideOptionsSheet({
       <View style={styles.handle} />
       <Text style={styles.title}>Choose your ride</Text>
       <Text style={styles.subtitle}>
-        {distance?.toFixed(1) ?? "--"} km - {tripMinutes} mins
+        {distance?.toFixed(1) ?? "--"} km &middot; {tripMinutes} min
       </Text>
 
       <View style={styles.optionsScrollArea}>
@@ -70,7 +52,6 @@ export function RideOptionsSheet({
             {options.map((option) => {
               const fare = distance !== null && duration !== null ? calculateRideFare(option, distance, duration) : 0;
               const isSelected = selectedOptionLabel === option.label;
-              const meta = getOptionMeta(option.label);
 
               return (
                 <Pressable
@@ -86,12 +67,12 @@ export function RideOptionsSheet({
                   }}>
                   <View style={styles.optionLeft}>
                     <View style={styles.optionIconWrap}>
-                      <Text style={styles.optionIcon}>{meta.icon}</Text>
+                      <Text style={styles.optionIcon}>{getOptionIcon(option.label)}</Text>
                     </View>
                     <View style={styles.optionCopy}>
                       <Text style={styles.optionTitle}>{option.label}</Text>
                       <Text numberOfLines={1} style={styles.optionDescription}>
-                        {meta.eta} - Drop {dropTime}
+                        {option.description} &middot; Drop by {dropTime}
                       </Text>
                     </View>
                   </View>
@@ -106,7 +87,7 @@ export function RideOptionsSheet({
       <View style={styles.sheetFooter}>
           {onContinue ? (
             <Pressable style={styles.primaryButton} onPress={onContinue}>
-              <Text style={styles.primaryButtonText}>Continue to confirmation</Text>
+              <Text style={styles.primaryButtonText}>Confirm ride</Text>
             </Pressable>
           ) : null}
 

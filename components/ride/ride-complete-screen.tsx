@@ -1,27 +1,30 @@
 import { Pressable, ScrollView, Text, View } from "react-native";
 
+import { useRideStore } from "../../context/ride-store";
 import { RideMap } from "./ride-map";
 import { rideStyles as styles } from "./ride-styles";
 import { RideTopBar } from "./ride-top-bar";
-import type { SelectedRide } from "./ride-types";
 
 type Props = {
-  ride: SelectedRide;
   onReturnHome: () => void;
 };
 
-export function RideCompleteScreen({ ride, onReturnHome }: Props) {
+export function RideCompleteScreen({ onReturnHome }: Props) {
+  const trip = useRideStore((s) => s.trip);
+
+  if (!trip) return null;
+
   const region = {
-    latitude: (ride.pickup.latitude + ride.dropoff.latitude) / 2,
-    longitude: (ride.pickup.longitude + ride.dropoff.longitude) / 2,
-    latitudeDelta: Math.abs(ride.pickup.latitude - ride.dropoff.latitude) + 0.08,
-    longitudeDelta: Math.abs(ride.pickup.longitude - ride.dropoff.longitude) + 0.08,
+    latitude: (trip.pickup.latitude + trip.dropoff.latitude) / 2,
+    longitude: (trip.pickup.longitude + trip.dropoff.longitude) / 2,
+    latitudeDelta: Math.abs(trip.pickup.latitude - trip.dropoff.latitude) + 0.08,
+    longitudeDelta: Math.abs(trip.pickup.longitude - trip.dropoff.longitude) + 0.08,
   };
 
   return (
     <View style={styles.screen}>
-      <RideMap pickup={ride.pickup} dropoff={ride.dropoff} region={region} routePath={ride.path} />
-      <RideTopBar title="Ride complete" subtitle="Fare, rating, and wallet updates now close the rider flow." badge="Step 5" />
+      <RideMap pickup={trip.pickup} dropoff={trip.dropoff} region={region} routePath={trip.path} />
+      <RideTopBar title="Trip complete" subtitle="Your ride has ended. Review the details below." />
 
       <ScrollView
         bounces={false}
@@ -30,27 +33,25 @@ export function RideCompleteScreen({ ride, onReturnHome }: Props) {
         showsVerticalScrollIndicator={false}>
         <View style={styles.sectionCard}>
           <Text style={styles.sectionLabel}>Trip summary</Text>
-          <Text style={styles.sectionTitle}>{ride.option.label} completed</Text>
-          <Text style={styles.sectionText}>Your fare has been finalized and the wallet update can happen after the ride completes.</Text>
+          <Text style={styles.sectionTitle}>{trip.option.label}</Text>
+          <Text style={styles.sectionText}>
+            {trip.distance} km &middot; {trip.duration} min
+          </Text>
         </View>
 
         <View style={styles.statCard}>
-          <Text style={styles.sectionLabel}>Final fare</Text>
-          <Text style={styles.statValue}>Rs {ride.fare}</Text>
+          <Text style={styles.sectionLabel}>Total fare</Text>
+          <Text style={styles.statValue}>Rs {trip.fare}</Text>
         </View>
 
-        <View style={styles.timeline}>
-          <View style={styles.timelineStep}>
-            <Text style={styles.timelineTitle}>1. Fare posted</Text>
-            <Text style={styles.timelineText}>The completed ride total is ready for receipts and history.</Text>
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.sectionLabel}>Distance</Text>
+            <Text style={styles.statValue}>{trip.distance} km</Text>
           </View>
-          <View style={styles.timelineStep}>
-            <Text style={styles.timelineTitle}>2. Rating placeholder</Text>
-            <Text style={styles.timelineText}>This is where rider feedback and driver rating can slot in next.</Text>
-          </View>
-          <View style={styles.timelineStep}>
-            <Text style={styles.timelineTitle}>3. Wallet update</Text>
-            <Text style={styles.timelineText}>The blueprint notes wallet integration after ride completion, so this screen leaves room for it.</Text>
+          <View style={styles.statCard}>
+            <Text style={styles.sectionLabel}>Duration</Text>
+            <Text style={styles.statValue}>{trip.duration} min</Text>
           </View>
         </View>
 

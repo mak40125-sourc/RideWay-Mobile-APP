@@ -4,9 +4,7 @@ import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useRouter } from 'expo-router';
 import { useDriverStore } from '../../store/driverStore';
 import { useRideStore } from '../../store/rideStore';
-import { useWalletStore } from '../../store/walletStore';
 import { colors, spacing, borderRadius, fontSize, fontWeight } from '../../constants/theme';
-import { calculateCommission } from '../../constants/commission';
 
 const { width, height } = Dimensions.get('window');
 
@@ -14,14 +12,12 @@ export default function DropNavigationScreen() {
   const router = useRouter();
   const { setStatus } = useDriverStore();
   const { current_ride } = useRideStore();
-  const { balance, deductCommission } = useWalletStore();
-
   const drop = current_ride?.drop_location;
   const fare = current_ride?.estimated_fare || 200;
 
   const handleCompleteRide = () => {
-    const commission = calculateCommission(fare);
-    deductCommission(commission);
+    // In production: POST /rides/:id/complete
+    // Backend deducts commission and updates wallet
     setStatus('RIDE_COMPLETED');
     router.push('/(driver)/ride-completed');
   };

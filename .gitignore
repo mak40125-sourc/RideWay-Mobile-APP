@@ -31,6 +31,7 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
 
 # typescript
@@ -41,3 +42,12 @@ app-example
 # generated native folders
 /ios
 /android
+
+# temp junk
+*.log
+*.err
+New Text Document.txt
+metro.err
+metro.log
+
+driver-app.env

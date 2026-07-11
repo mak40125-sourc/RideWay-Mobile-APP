@@ -9,7 +9,7 @@ export const colors = {
   success: '#10B981',
   error: '#EF4444',
   warning: '#F59E0B',
-  accent: '#3B82F6',
+  accent: '#111111',
 };
 
 export const spacing = {

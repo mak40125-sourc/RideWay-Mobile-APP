@@ -1,296 +1,268 @@
 import * as Location from "expo-location";
 import { router } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
-import { SafeAreaView } from "react-native";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { Pressable, Text, View } from "react-native";
+import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { HomeHeader } from "../../components/home/home-header";
-import { HomeMap } from "../../components/home/home-map";
-import { HomeSearchSheet } from "../../components/home/home-search-sheet";
-import { HomeStateScreen } from "../../components/home/home-state-screen";
-import { homeStyles as styles } from "../../components/home/home-styles";
-import type { Coordinates, RideEstimate, RideOption, SearchResult } from "../../components/home/types";
-import { rideOptions } from "../../components/ride/ride-config";
-import { calculateRideFare } from "../../components/ride/ride-helpers";
-import { useAuth } from "../../context/auth-context";
+import { RideMap } from "../../components/Map/RideMap";
+import { Header } from "../../components/Header";
+import { BottomSheetHandle } from "../../components/BottomSheet/BottomSheetHandle";
+import { BottomSheetContent } from "../../components/BottomSheet/BottomSheetContent";
+import { useHomeStore } from "../../store/homeStore";
+import { useRideStore } from "../../context/ride-store";
 import { getRouteEstimate } from "../../services/osrm";
-import { searchDestinations } from "../../services/places";
-import { buildMapRegion } from "../../utils/map-region";
+import { calculateRideFare } from "../../components/ride/ride-helpers";
+import type { SearchResult } from "../../components/home/types";
 
 export function RiderHomeScreen() {
-  const { authUser } = useAuth();
-  const [location, setLocation] = useState<Coordinates | null>(null);
-  const [permissionDenied, setPermissionDenied] = useState(false);
-  const [loadingLocation, setLoadingLocation] = useState(true);
-  const [isRefreshingLocation, setIsRefreshingLocation] = useState(false);
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [selectedDestination, setSelectedDestination] = useState<SearchResult | null>(null);
-  const [estimate, setEstimate] = useState<RideEstimate | null>(null);
-  const [loadingEstimate, setLoadingEstimate] = useState(false);
-  const [selectedOption, setSelectedOption] = useState<RideOption>(rideOptions[0]);
+  const insets = useSafeAreaInsets();
+  const sheetRef = useRef<BottomSheet>(null);
 
-  const loadCurrentLocation = async (showInitialLoader = false) => {
-    if (showInitialLoader) {
-      setLoadingLocation(true);
-    } else {
-      setIsRefreshingLocation(true);
-    }
-    
-    // Safety timeout: If location takes more than 10 seconds, fail gracefully
-    const timeoutId = setTimeout(() => {
-      if (loadingLocation) setLoadingLocation(false);
-      setIsRefreshingLocation(false);
-    }, 10000);
+  const location = useHomeStore((s) => s.location);
+  const permissionDenied = useHomeStore((s) => s.permissionDenied);
+  const loadingLocation = useHomeStore((s) => s.loadingLocation);
+  const selectedDestination = useHomeStore((s) => s.selectedDestination);
+  const estimate = useHomeStore((s) => s.estimate);
+  const loadingEstimate = useHomeStore((s) => s.loadingEstimate);
+  const selectedOption = useHomeStore((s) => s.selectedOption);
+  const setSheetIndex = useHomeStore((s) => s.setSheetIndex);
 
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+  const setLocation = useHomeStore((s) => s.setLocation);
+  const setPermissionDenied = useHomeStore((s) => s.setPermissionDenied);
+  const setLoadingLocation = useHomeStore((s) => s.setLoadingLocation);
+  const setIsRefreshingLocation = useHomeStore((s) => s.setIsRefreshingLocation);
+  const setQuery = useHomeStore((s) => s.setQuery);
+  const setResults = useHomeStore((s) => s.setResults);
+  const setSelectedDestination = useHomeStore((s) => s.setSelectedDestination);
+  const setEstimate = useHomeStore((s) => s.setEstimate);
+  const setLoadingEstimate = useHomeStore((s) => s.setLoadingEstimate);
+  const resetDestination = useHomeStore((s) => s.resetDestination);
 
-      if (status !== "granted") {
-        setPermissionDenied(true);
-        return;
-      }
+  const snapPoints = useMemo(() => ["18%", "45%", "90%"], []);
 
-      // Try to get last known position first (it's nearly instant)
-      let current = await Location.getLastKnownPositionAsync({});
-      
-      // Fallback to current position if last known is unavailable
-      if (!current) {
-        current = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-      }
-
-      setPermissionDenied(false);
-      setLocation({
-        latitude: current.coords.latitude,
-        longitude: current.coords.longitude,
-      });
-    } catch (err) {
-      console.warn("Location error:", err);
-      setPermissionDenied(true);
-    } finally {
-      clearTimeout(timeoutId);
+  const loadCurrentLocation = useCallback(
+    async (showInitialLoader = false) => {
       if (showInitialLoader) {
-        setLoadingLocation(false);
+        setLoadingLocation(true);
       } else {
+        setIsRefreshingLocation(true);
+      }
+
+      const timeoutId = setTimeout(() => {
+        setLoadingLocation(false);
+        setIsRefreshingLocation(false);
+      }, 10000);
+
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          setPermissionDenied(true);
+          return;
+        }
+
+        let current = await Location.getLastKnownPositionAsync({});
+        if (!current) {
+          current = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+        }
+
+        setPermissionDenied(false);
+        setLocation({
+          latitude: current.coords.latitude,
+          longitude: current.coords.longitude,
+        });
+      } catch {
+        setPermissionDenied(true);
+      } finally {
+        clearTimeout(timeoutId);
+        setLoadingLocation(false);
         setIsRefreshingLocation(false);
       }
-    }
-  };
+    },
+    [setLocation, setPermissionDenied, setLoadingLocation, setIsRefreshingLocation],
+  );
 
   useEffect(() => {
-    void loadCurrentLocation(true);
-  }, []);
+    loadCurrentLocation(true);
+  }, [loadCurrentLocation]);
 
-  useEffect(() => {
-    let active = true;
-
-    const runSearch = async () => {
-      if (query.trim().length < 3) {
-        setResults([]);
-        setIsSearching(false);
-        return;
-      }
-
-      setIsSearching(true);
-
-      try {
-        const matches = await searchDestinations(query);
-
-        if (active) {
-          setResults(matches);
-        }
-      } catch {
-        if (active) {
-          setResults([]);
-        }
-      } finally {
-        if (active) {
-          setIsSearching(false);
-        }
-      }
-    };
-
-    const timeout = setTimeout(runSearch, 250);
-
-    return () => {
-      active = false;
-      clearTimeout(timeout);
-    };
-  }, [query]);
+  const handleSelectDestination = useCallback(
+    async (item: SearchResult, title: string) => {
+      setSelectedDestination(item);
+      setQuery(title);
+      setResults([]);
+    },
+    [setSelectedDestination, setQuery, setResults],
+  );
 
   useEffect(() => {
     let active = true;
 
-    const loadEstimate = async () => {
-      const destinationCoords = selectedDestination?.geometry?.coordinates;
-
-      if (!location || !destinationCoords) {
-        setEstimate(null);
-        return;
-      }
-
-      setLoadingEstimate(true);
-
-      try {
-        const nextEstimate = await getRouteEstimate(location, {
-          latitude: destinationCoords[1],
-          longitude: destinationCoords[0],
-        });
-
-        if (active) {
-          setEstimate(nextEstimate);
-        }
-      } catch {
-        if (active) {
-          setEstimate(null);
-        }
-      } finally {
-        if (active) {
-          setLoadingEstimate(false);
-        }
-      }
-    };
-
-    void loadEstimate();
-
-    return () => {
-      active = false;
-    };
-  }, [location, selectedDestination]);
-
-  const destinationCoords = useMemo(() => {
     const coords = selectedDestination?.geometry?.coordinates;
-
-    if (!coords) {
-      return null;
-    }
-
-    return {
-      latitude: coords[1],
-      longitude: coords[0],
-    };
-  }, [selectedDestination]);
-
-  const region = useMemo(() => {
-    if (!location) {
-      return undefined;
-    }
-
-    return buildMapRegion(location, destinationCoords);
-  }, [destinationCoords, location]);
-
-  const destinationLabel = useMemo(() => {
-    const properties = selectedDestination?.properties;
-
-    if (!properties) {
-      return "";
-    }
-
-    return [properties.name, properties.city || properties.state, properties.country]
-      .filter(Boolean)
-      .join(", ");
-  }, [selectedDestination]);
-
-  const locationLabel = useMemo(() => {
-    if (!location) {
-      return permissionDenied ? "Location permission required" : "Current location unavailable";
-    }
-
-    return `Lat ${location.latitude.toFixed(4)}, Lng ${location.longitude.toFixed(4)}`;
-  }, [location, permissionDenied]);
-
-  const currentFare = useMemo(() => {
-    if (!estimate) return 0;
-    return calculateRideFare(selectedOption, estimate.distance, estimate.duration);
-  }, [estimate, selectedOption]);
-
-  const requestRide = () => {
-    if (!location || !destinationCoords || !estimate) {
+    if (!location || !coords) {
+      setEstimate(null);
       return;
     }
 
-    router.push({
-      pathname: "/confirm",
-      params: {
-        pickupLat: String(location.latitude),
-        pickupLng: String(location.longitude),
-        dropLat: String(destinationCoords.latitude),
-        dropLng: String(destinationCoords.longitude),
-        rideLabel: selectedOption.label,
-        rideDescription: selectedOption.description,
-        fare: String(currentFare),
-        distance: String(estimate.distance),
-        duration: String(estimate.duration),
-        path: JSON.stringify(estimate.path),
-      },
-    });
-  };
+    setLoadingEstimate(true);
 
-  // Guard against crashes if authUser is missing during transition
-  if (!authUser) {
-    return null;
-  }
+    const destinationCoords = { latitude: coords[1], longitude: coords[0] };
+
+    getRouteEstimate(location, destinationCoords)
+      .then((next) => {
+        if (active) setEstimate(next);
+      })
+      .catch(() => {
+        if (active) setEstimate(null);
+      })
+      .finally(() => {
+        if (active) setLoadingEstimate(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [location, selectedDestination, setEstimate, setLoadingEstimate]);
+
+  const destinationCoords = useMemo(() => {
+    const coords = selectedDestination?.geometry?.coordinates;
+    if (!coords) return null;
+    return { latitude: coords[1], longitude: coords[0] };
+  }, [selectedDestination]);
+
+  const setTrip = useRideStore((s) => s.setTrip);
+
+  const handleRequestRide = useCallback(() => {
+    if (!location || !destinationCoords || !estimate) return;
+
+    const fare = calculateRideFare(selectedOption, estimate.distance, estimate.duration);
+
+    setTrip({
+      pickup: location,
+      dropoff: destinationCoords,
+      selectedOption,
+      fare,
+      distance: estimate.distance,
+      duration: estimate.duration,
+      path: estimate.path,
+    });
+
+    router.push("/confirm");
+  }, [location, destinationCoords, estimate, selectedOption, setTrip]);
+
+  const handleRefreshLocation = useCallback(() => {
+    loadCurrentLocation(false);
+  }, [loadCurrentLocation]);
 
   if (loadingLocation) {
     return (
-      <HomeStateScreen
-        loading
-        title="Finding your pickup point"
-        description="We&apos;re setting up the rider home screen around your live location."
-      />
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
+        <Text
+          style={{
+            color: "#111111",
+            fontSize: 28,
+            fontFamily: "NeueMontreal-Bold",
+            textAlign: "center",
+          }}
+        >
+          Finding your pickup point
+        </Text>
+        <Text
+          style={{
+            color: "#6B7280",
+            fontSize: 14,
+            fontFamily: "NeueMontreal-Regular",
+            textAlign: "center",
+            marginTop: 8,
+            paddingHorizontal: 28,
+          }}
+        >
+          We&apos;re setting up the rider home screen around your live location.
+        </Text>
+      </View>
     );
   }
 
-  if (permissionDenied || !location || !region) {
+  if (permissionDenied || !location) {
     return (
-      <HomeStateScreen
-        title="Location access is needed"
-        description="Allow location permission to search destinations, estimate routes, and start the rider flow from home."
-      />
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center", paddingHorizontal: 28 }}>
+        <Text style={{ color: "#111111", fontSize: 28, fontFamily: "NeueMontreal-Bold", textAlign: "center" }}>
+          Location access is needed
+        </Text>
+        <Text style={{ color: "#6B7280", fontSize: 14, fontFamily: "NeueMontreal-Regular", textAlign: "center", marginTop: 8 }}>
+          Allow location permission to search destinations, estimate routes, and start the rider flow from home.
+        </Text>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <HomeMap
-        location={location}
-        destinationCoords={destinationCoords}
-        region={region}
-        routePath={estimate?.path}
-      />
-      <HomeHeader />
-      <HomeSearchSheet
-        query={query}
-        setQuery={setQuery}
-        results={results}
-        isSearching={isSearching}
-        selectedDestination={selectedDestination}
-        destinationLabel={destinationLabel}
-        loadingEstimate={loadingEstimate}
-        estimate={estimate}
-        locationLabel={locationLabel}
-        isRefreshingLocation={isRefreshingLocation}
-        rideOptions={rideOptions}
-        selectedOptionLabel={selectedOption.label}
-        onSelectOption={(option) => setSelectedOption(option)}
-        currentFare={currentFare}
-        onRefreshLocation={() => {
-          void loadCurrentLocation(false);
+    <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+      <RideMap location={location} destinationCoords={destinationCoords} routePath={estimate?.path} />
+
+      <Header />
+
+      <View
+        style={{
+          position: "absolute",
+          right: 16,
+          top: insets.top + 80,
+          gap: 12,
+          zIndex: 10,
         }}
-        onSelectDestination={(item, title) => {
-          setSelectedDestination(item);
-          setQuery(title);
-          setResults([]);
+      >
+        <Pressable
+          onPress={() => {
+            if (location) {
+              // Center map on current location
+            }
+          }}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: "#FFFFFF",
+            alignItems: "center",
+            justifyContent: "center",
+            shadowColor: "#000",
+            shadowOpacity: 0.06,
+            shadowRadius: 10,
+            elevation: 4,
+          }}
+        >
+          <Text style={{ fontSize: 18 }}>📍</Text>
+        </Pressable>
+      </View>
+
+      <BottomSheet
+        ref={sheetRef}
+        snapPoints={snapPoints}
+        index={0}
+        onChange={setSheetIndex}
+        handleComponent={BottomSheetHandle}
+        backgroundStyle={{
+          backgroundColor: "#FFFFFF",
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
+          shadowColor: "#000",
+          shadowOpacity: 0.06,
+          shadowRadius: 10,
+          elevation: 4,
         }}
-        onResetDestination={() => {
-          setSelectedDestination(null);
-          setEstimate(null);
-          setQuery("");
-        }}
-        onContinue={requestRide}
-      />
-    </SafeAreaView>
+        enablePanDownToClose={false}
+        enableDynamicSizing={false}
+        overDragResistanceFactor={0.1}
+      >
+        <BottomSheetScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+          <BottomSheetContent
+            onRefreshLocation={handleRefreshLocation}
+            onSelectDestination={handleSelectDestination}
+            onContinue={handleRequestRide}
+          />
+        </BottomSheetScrollView>
+      </BottomSheet>
+    </View>
   );
 }

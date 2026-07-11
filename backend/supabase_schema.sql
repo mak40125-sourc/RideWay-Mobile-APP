@@ -41,6 +41,8 @@ CREATE TABLE IF NOT EXISTS public.drivers (
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE UNIQUE,
   vehicle_type vehicle_type NOT NULL,
   vehicle_number TEXT NOT NULL,
+  vehicle_model TEXT,
+  vehicle_color TEXT,
   is_online BOOLEAN DEFAULT false,
   kyc_status kyc_status DEFAULT 'pending',
   is_verified BOOLEAN DEFAULT false,

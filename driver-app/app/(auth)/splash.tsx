@@ -1,30 +1,11 @@
-import { useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useDriverStore } from '../../store/driverStore';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 
 export default function SplashScreen() {
-  const router = useRouter();
-  const { driver, is_online } = useDriverStore();
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      setTimeout(() => {
-        if (driver) {
-          router.replace('/(driver)/home');
-        } else {
-          router.replace('/(auth)/login');
-        }
-      }, 1500);
-    };
-
-    checkAuth();
-  }, []);
-
   return (
     <View style={styles.container}>
       <Text style={styles.logo}>RideWay</Text>
       <Text style={styles.tagline}>Driver App</Text>
+      <ActivityIndicator size="large" color="#FFFFFF" style={styles.loader} />
     </View>
   );
 }
@@ -41,10 +22,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
     letterSpacing: -1,
+    fontFamily: 'NeueMontreal-Bold',
   },
   tagline: {
     fontSize: 18,
     color: '#9CA3AF',
     marginTop: 8,
+    fontFamily: 'NeueMontreal-Regular',
+  },
+  loader: {
+    marginTop: 32,
   },
 });

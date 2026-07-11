@@ -4,7 +4,6 @@ import { Text, View } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
 
 import { buildMapEdgePadding } from "../../utils/map-region";
-import { buildMockRoutePath } from "../../utils/mock-route";
 import type { Coordinates } from "../home/types";
 import { rideStyles as styles } from "./ride-styles";
 
@@ -75,34 +74,8 @@ export function RideMap({
       return providedRoutePath;
     }
 
-    return buildMockRoutePath(pickup, dropoff);
+    return dropoff ? [pickup, dropoff] : [pickup];
   }, [dropoff, pickup, providedRoutePath]);
-
-  useEffect(() => {
-    if (!mapRef.current || !mapReady) {
-      return;
-    }
-
-    const runFit = () => {
-      if (!mapRef.current) {
-        return;
-      }
-
-      if (dropoff || (showDriverMotion && driverPoint)) {
-        const pointsToFit = [...routePath];
-        if (driverPoint) pointsToFit.push(driverPoint);
-        
-        mapRef.current.fitToCoordinates(pointsToFit, {
-          edgePadding: buildMapEdgePadding(340),
-          animated: true,
-        });
-        return;
-      }
-
-      mapRef.current.animateToRegion(region, 500);
-    };
-
-  }, [dropoff, mapReady, region, routePath]);
 
   useEffect(() => {
     if (!showDriverMotion || routePath.length < 2) {
@@ -138,6 +111,35 @@ export function RideMap({
     showDriverMotion && driverPoint
       ? routePath.filter((_, index) => index / Math.max(routePath.length - 1, 1) <= driverProgress)
       : [];
+
+  useEffect(() => {
+    if (!mapRef.current || !mapReady) {
+      return;
+    }
+
+    const runFit = () => {
+      if (!mapRef.current) {
+        return;
+      }
+
+      if (dropoff || (showDriverMotion && driverPoint)) {
+        const pointsToFit = [...routePath];
+        if (driverPoint) pointsToFit.push(driverPoint);
+
+        mapRef.current.fitToCoordinates(pointsToFit, {
+          edgePadding: buildMapEdgePadding(260),
+          animated: true,
+        });
+        return;
+      }
+
+      mapRef.current.animateToRegion(region, 500);
+    };
+
+    const timeout = setTimeout(runFit, 160);
+
+    return () => clearTimeout(timeout);
+  }, [driverPoint, dropoff, mapReady, region, routePath, showDriverMotion]);
 
   return (
     <>

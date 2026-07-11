@@ -1,121 +1,50 @@
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { TouchableOpacity, View, StyleSheet } from 'react-native';
 import { useDriverStore } from '../../store/driverStore';
-import { useWalletStore } from '../../store/walletStore';
-import { colors, spacing, borderRadius, fontSize, fontWeight } from '../../constants/theme';
-import { WALLET_MINIMUM } from '../../constants/wallet';
 
 interface OnlineToggleProps {
   onToggle: (online: boolean) => void;
 }
 
 export default function OnlineToggle({ onToggle }: OnlineToggleProps) {
-  const { is_online, driver } = useDriverStore();
-  const { balance } = useWalletStore();
-  const router = useRouter();
-
-  const is_low_balance = balance < WALLET_MINIMUM;
-  const can_go_online = driver?.kyc_status === 'APPROVED' && 
-                        driver?.vehicle_status === 'APPROVED' && 
-                        !is_low_balance;
-
-  const handleToggle = () => {
-    if (!can_go_online && !is_online) {
-      if (is_low_balance) {
-        router.push('/(wallet)/wallet');
-      }
-      return;
-    }
-    onToggle(!is_online);
-  };
+  const { is_online } = useDriverStore();
 
   return (
-    <View style={styles.container}>
-      <View style={styles.statusContainer}>
-        <View style={[styles.statusDot, is_online ? styles.onlineDot : styles.offlineDot]} />
-        <Text style={styles.statusText}>
-          {is_online ? 'Online' : 'Offline'}
-        </Text>
-      </View>
-      
-      <TouchableOpacity 
-        style={[
-          styles.toggleButton,
-          is_online ? styles.toggleOn : styles.toggleOff,
-          !can_go_online && !is_online && styles.toggleDisabled,
-        ]} 
-        onPress={handleToggle}
-      >
-        <View style={[styles.toggleThumb, is_online && styles.toggleThumbOn]} />
-      </TouchableOpacity>
-
-      {is_low_balance && !is_online && (
-        <Text style={styles.warningText}>Low balance - Recharge to go online</Text>
-      )}
-    </View>
+    <TouchableOpacity
+      style={[styles.toggle, is_online ? styles.on : styles.off]}
+      onPress={() => onToggle(!is_online)}
+      activeOpacity={0.7}
+    >
+      <View style={[styles.thumb, is_online && styles.thumbOn]} />
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.background,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  statusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: spacing.sm,
-  },
-  onlineDot: {
-    backgroundColor: colors.success,
-  },
-  offlineDot: {
-    backgroundColor: colors.textMuted,
-  },
-  statusText: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.medium,
-    color: colors.text,
-  },
-  toggleButton: {
-    width: 50,
-    height: 30,
-    borderRadius: 15,
+  toggle: {
+    width: 52,
+    height: 32,
+    borderRadius: 16,
     padding: 2,
     justifyContent: 'center',
   },
-  toggleOff: {
-    backgroundColor: colors.border,
+  off: {
+    backgroundColor: '#8E8E93',
   },
-  toggleOn: {
-    backgroundColor: colors.success,
+  on: {
+    backgroundColor: '#34C759',
   },
-  toggleDisabled: {
-    backgroundColor: colors.error,
+  thumb: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  toggleThumb: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: colors.background,
-  },
-  toggleThumbOn: {
+  thumbOn: {
     alignSelf: 'flex-end',
-  },
-  warningText: {
-    fontSize: fontSize.xs,
-    color: colors.error,
-    position: 'absolute',
-    bottom: -20,
-    left: 0,
   },
 });

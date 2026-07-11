@@ -1,35 +1,23 @@
 import { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useDriverStore } from '../../store/driverStore';
 import { useRideStore } from '../../store/rideStore';
-import { useWalletStore } from '../../store/walletStore';
 import { colors, spacing, borderRadius, fontSize, fontWeight } from '../../constants/theme';
-import { calculateCommission } from '../../constants/commission';
 
 export default function RideCompletedScreen() {
   const router = useRouter();
-  const { setStatus, setEarningsToday } = useDriverStore();
+  const { setStatus, earnings_today, setEarningsToday } = useDriverStore();
   const { current_ride, clearRide } = useRideStore();
-  const { balance, addTransaction } = useWalletStore();
 
   const fare = current_ride?.estimated_fare || 200;
-  const commission = calculateCommission(fare);
-  const earnings = fare - commission;
+  const commission = 0;
+  const earnings = fare;
 
   const handleDone = () => {
     setStatus('ONLINE_IDLE');
-    setEarningsToday(prev => prev + earnings);
-    addTransaction({
-      id: `txn-${Date.now()}`,
-      driver_id: 'driver-1',
-      type: 'COMMISSION_DEBIT',
-      amount: commission,
-      balance_after: balance - commission,
-      ride_id: current_ride?.id,
-      description: `Ride commission - ₹${commission}`,
-      created_at: new Date().toISOString(),
-    });
+    setEarningsToday(earnings_today + earnings);
     clearRide();
     router.replace('/(driver)/home');
   };
@@ -38,7 +26,7 @@ export default function RideCompletedScreen() {
     <View style={styles.container}>
       <View style={styles.content}>
         <View style={styles.iconContainer}>
-          <Text style={styles.icon}>✓</Text>
+          <Ionicons name="checkmark" size={40} color={colors.background} />
         </View>
 
         <Text style={styles.title}>Ride Completed!</Text>
@@ -57,11 +45,6 @@ export default function RideCompletedScreen() {
             <Text style={styles.totalLabel}>Your Earnings</Text>
             <Text style={styles.totalValue}>₹{earnings}</Text>
           </View>
-        </View>
-
-        <View style={styles.walletCard}>
-          <Text style={styles.walletLabel}>Wallet Balance</Text>
-          <Text style={styles.walletValue}>₹{balance.toFixed(2)}</Text>
         </View>
 
         <TouchableOpacity style={styles.button} onPress={handleDone}>
@@ -91,10 +74,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'center',
     marginBottom: spacing.lg,
-  },
-  icon: {
-    fontSize: 40,
-    color: colors.background,
   },
   title: {
     fontSize: fontSize.xxl,
@@ -149,23 +128,6 @@ const styles = StyleSheet.create({
     fontSize: fontSize.lg,
     fontWeight: fontWeight.bold,
     color: colors.success,
-  },
-  walletCard: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    alignItems: 'center',
-    marginBottom: spacing.xl,
-  },
-  walletLabel: {
-    fontSize: fontSize.sm,
-    color: 'rgba(255,255,255,0.7)',
-    marginBottom: spacing.xs,
-  },
-  walletValue: {
-    fontSize: fontSize.xxl,
-    fontWeight: fontWeight.bold,
-    color: colors.background,
   },
   button: {
     backgroundColor: colors.primary,

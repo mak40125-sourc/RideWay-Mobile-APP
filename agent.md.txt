@@ -1,0 +1,452 @@
+# RideWay Engineering Guide
+
+Version: 1.0
+
+---
+
+# Project Philosophy
+
+RideWay is a production-grade ride hailing platform inspired by Uber, Lyft and Bolt.
+
+The codebase must be scalable, maintainable and modular.
+
+Every change should improve long-term architecture instead of introducing shortcuts.
+
+When multiple solutions exist:
+
+Choose the one that improves architecture.
+
+Never choose the fastest hack.
+
+---
+
+# Engineering Principles
+
+Single Source of Truth
+
+Avoid duplicated state.
+
+Avoid duplicated providers.
+
+Avoid duplicated navigation.
+
+Avoid duplicated business logic.
+
+Avoid duplicated authentication listeners.
+
+Every feature should exist in exactly one place.
+
+---
+
+# Code Quality
+
+Never write temporary code.
+
+Never leave TODO implementations.
+
+Never hardcode production values.
+
+Never add workaround delays.
+
+Never ignore errors.
+
+Always explain architectural decisions.
+
+---
+
+# Project Structure
+
+Use feature-first architecture.
+
+Example:
+
+app/
+components/
+features/
+hooks/
+contexts/
+services/
+utils/
+types/
+constants/
+
+Avoid large files.
+
+Maximum recommended size:
+
+200-300 lines.
+
+Split components whenever possible.
+
+---
+
+# Authentication
+
+There must be exactly one authentication flow.
+
+Splash
+
+↓
+
+Restore Session
+
+↓
+
+Authenticated?
+
+↓
+
+YES → Home
+
+NO → Login
+
+↓
+
+Profile Completion (only when required)
+
+↓
+
+Home
+
+Never perform auth checks inside random screens.
+
+Never register multiple Supabase auth listeners.
+
+Never call getSession() from multiple places.
+
+Never duplicate redirect logic.
+
+Authentication must have a single source of truth.
+
+---
+
+# Navigation
+
+Expo Router only.
+
+One Root Layout.
+
+One Navigation Tree.
+
+No nested navigation containers.
+
+Avoid router.replace() loops.
+
+Avoid duplicated route guards.
+
+---
+
+# State Management
+
+Centralize state.
+
+Contexts:
+
+AuthContext
+
+LocationContext
+
+RideContext
+
+UIContext
+
+Keep state close to the feature.
+
+Avoid prop drilling.
+
+Avoid duplicated loading states.
+
+---
+
+# Home Screen Architecture
+
+Every home screen must follow this hierarchy.
+
+HomeScreen
+
+├── RideMap
+├── HeaderOverlay
+├── FloatingControls
+├── BottomSheet
+
+No stacked pages.
+
+No multiple maps.
+
+No duplicated overlays.
+
+No nested layouts.
+
+---
+
+# Bottom Sheet
+
+Always use
+
+@gorhom/bottom-sheet
+
+Never build custom implementations.
+
+Snap Points
+
+18%
+
+45%
+
+90%
+
+The sheet must:
+
+drag
+
+collapse
+
+expand
+
+animate
+
+The sheet should never feel like another screen.
+
+---
+
+# Maps
+
+Map occupies full screen.
+
+Header overlays map.
+
+Bottom sheet overlays map.
+
+Floating controls overlay map.
+
+Never place map inside scroll views.
+
+Never mount multiple maps.
+
+---
+
+# UI Philosophy
+
+Minimal.
+
+Premium.
+
+Calm.
+
+Readable.
+
+Large typography.
+
+Generous spacing.
+
+Consistent border radius.
+
+Consistent elevation.
+
+Consistent animations.
+
+Inspired by
+
+Uber
+
+Apple
+
+Lyft
+
+Bolt
+
+---
+
+# Components
+
+Every component should have one responsibility.
+
+Example
+
+SearchBar
+
+RideCard
+
+RideMap
+
+PickupCard
+
+ProfileButton
+
+Header
+
+BottomSheetContent
+
+Avoid giant "Home.tsx".
+
+---
+
+# Design Consistency
+
+Every screen must share
+
+spacing
+
+typography
+
+button radius
+
+card radius
+
+shadow
+
+animation
+
+No screen should look like it belongs to another app.
+
+---
+
+# Prototype Policy
+
+RideWay is no longer a prototype.
+
+Remove
+
+demo data
+
+sample users
+
+fake destinations
+
+fake rides
+
+fake fares
+
+placeholder cards
+
+temporary onboarding
+
+skip buttons
+
+mock profile previews
+
+hardcoded coordinates
+
+Every visible screen should represent a real production workflow.
+
+---
+
+# Data
+
+No hardcoded data.
+
+Destination
+
+Pickup
+
+Fare
+
+Ride Type
+
+Profile
+
+must all originate from actual application state.
+
+---
+
+# Performance
+
+Avoid unnecessary renders.
+
+Use memoization where appropriate.
+
+Lazy load heavy screens.
+
+Keep map performant.
+
+Avoid expensive calculations during rendering.
+
+---
+
+# Error Handling
+
+Every network request must handle
+
+loading
+
+success
+
+failure
+
+timeout
+
+offline
+
+No silent failures.
+
+---
+
+# Logging
+
+During development:
+
+Meaningful logs only.
+
+Before production:
+
+Remove debug logging.
+
+---
+
+# Security
+
+Never expose secrets.
+
+Never trust client input.
+
+Validate everything.
+
+Use Supabase Row Level Security.
+
+Keep backend authoritative.
+
+---
+
+# Documentation
+
+Every major refactor must explain
+
+Why
+
+What changed
+
+Architecture before
+
+Architecture after
+
+Files modified
+
+Future recommendations
+
+---
+
+# Before Adding Any Feature
+
+Ask
+
+Can this reuse an existing component?
+
+Can this improve architecture?
+
+Does this duplicate existing logic?
+
+Will this scale?
+
+---
+
+# Final Rule
+
+RideWay should always feel like one cohesive application.
+
+Never allow multiple UI styles.
+
+Never allow multiple authentication flows.
+
+Never allow duplicate architecture.
+
+Every screen should feel like it belongs to the same product.

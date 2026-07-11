@@ -1,323 +1,715 @@
-# Driver App Agent — Architecture & UI Guardrails
+# AGENT_DRIVER.md
 
-Purpose:
-This agent enforces **RideWay Driver App architecture and UI consistency**.
-All code generation must follow these rules strictly.
+# RideWay Driver App Engineering Guide
 
----
+Version: 1.0
 
-# 1. App Scope
+This document defines the architecture, engineering standards, workflows and development philosophy for the RideWay Driver App.
 
-This agent applies to:
+This file supplements the global AGENT.md.
 
-* rideway-driver app only
-* Driver navigation
-* Driver wallet
-* Driver ride flow
-* Driver UI screens
-
-Do NOT mix rider logic.
+If a conflict exists, AGENT.md takes precedence unless explicitly overridden for driver-specific functionality.
 
 ---
 
-# 2. Architecture Rules
+# Mission
 
-Driver App must remain:
+The Driver App is not a dashboard.
 
-* Separate Expo project
-* Separate navigation stack
-* Shared theme only
-* Shared API client allowed
-* Separate state management
+It is a real-time operational application whose primary objective is to help drivers safely and efficiently complete rides.
 
-Never import rider screens.
+Every screen, interaction and workflow must reduce cognitive load while driving.
+
+Never design for aesthetics over usability.
 
 ---
 
-# 3. Driver App Screen Flow
+# Core Philosophy
 
-Required Flow:
+The Driver App should feel:
 
-Splash
-→ Login
-→ KYC
-→ Vehicle Setup
-→ Wallet Check
-→ Driver Home
-→ Online Toggle
-→ Ride Request
-→ Pickup Navigation
-→ Ride In Progress
-→ Drop Navigation
-→ Ride Completed
+Professional
 
-No alternate shortcuts allowed.
+Reliable
+
+Fast
+
+Predictable
+
+Minimal
+
+Every interaction should help drivers complete rides with as few taps as possible.
 
 ---
 
-# 4. Navigation Structure
+# Driver Workflow
 
-RootStack
-├── AuthStack
-└── DriverMainStack
+The Driver App exists to complete the following lifecycle:
 
-DriverMainStack:
+Launch
 
-* Home
-* PickupNavigation
-* RideProgress
-* DropNavigation
-* RideCompleted
-* Wallet
-* Earnings
-* History
-* Profile
+↓
 
-Navigation must remain stack-based.
+Restore Session
 
----
+↓
 
-# 5. UI Philosophy (Driver App)
+Driver Login
 
-Driver UI must follow:
+↓
 
-* Map-first
-* Minimal overlays
-* One-action focus
-* Large touch targets
-* Calm visuals
+Driver Profile Verification
 
-Driver UI must match rider UI style.
+↓
 
----
+Driver Home
 
-# 6. Map Rules
+↓
 
-Map must always:
+Offline
 
-* occupy full screen
-* remain mounted
-* never reinitialize
-* support live GPS updates
+↓
 
-Overlays must float above map.
+Go Online
 
----
+↓
 
-# 7. Driver Home UI Layout
+Receive Ride Request
 
-Top:
-Online Toggle
+↓
 
-Card:
-Wallet Balance
-Today's Earnings
+Accept Ride
 
-Center:
-Map
+↓
 
-Bottom:
-Idle / Ride state card
+Navigate to Pickup
 
-No heavy bottom sheet like rider app.
+↓
 
----
+Arrived
 
-# 8. Wallet UI Rules
+↓
 
-Wallet must:
+Wait for Passenger
 
-* appear on Home
-* have dedicated screen
-* show balance prominently
-* support recharge
+↓
 
-Low balance:
+Start Ride
 
-* disable online toggle
-* show warning
+↓
+
+Navigate to Destination
+
+↓
+
+Complete Ride
+
+↓
+
+Available Again
+
+Never introduce unnecessary intermediate screens.
 
 ---
 
-# 9. Ride Request UI
+# Engineering Principles
 
-Must be:
+Single Source of Truth.
 
-* Full width overlay
-* Large accept button
-* Countdown timer
-* Pickup + drop info
+Avoid duplicated:
 
-Auto dismiss after timeout.
+Driver state
 
----
+Ride state
 
-# 10. Navigation Screen UI
+Location state
 
-Full screen map only.
+Authentication
 
-Allowed overlays:
+Navigation
 
-* turn instruction
-* ETA
-* distance
-* arrived button
-* call rider button
+Vehicle information
 
-No extra UI allowed.
+Driver availability
+
+Business logic
+
+Only one component should own each responsibility.
 
 ---
 
-# 11. Typography Rules
+# Project Structure
 
-Font:
-Tex Gyre Heros only
+Follow feature-first architecture.
 
-Title:
-Bold
+Example:
 
-Body:
-Regular
-
-No font mixing.
-
----
-
-# 12. Color Rules
-
-Driver app must use:
-
-Primary: #111111
-Background: #FFFFFF
-Secondary text: #6B7280
-
-No bright colors.
-
-Red allowed only:
-
-* low wallet
-* cancel
-
----
-
-# 13. Spacing Rules
-
-Padding base:
-16
-
-Card radius:
-20
-
-Button height:
-48+
-
-Touch targets:
-minimum 44px
-
----
-
-# 14. Component Folder Rules
-
-Allowed component groups:
+app/
 
 components/
 
-* driver/
-* wallet/
-* ride/
-* map/
+features/
 
-No mixing with rider components.
+contexts/
 
----
+hooks/
 
-# 15. Store Rules
+services/
 
-Separate stores required:
+utils/
 
-driverStore
-rideStore
-walletStore
+types/
 
-Never combine.
+constants/
 
----
+assets/
 
-# 16. Performance Rules
-
-Must:
-
-* keep map mounted
-* throttle location updates
-* use memoized components
-* avoid deep re-renders
-* keep websocket persistent
+Never place business logic inside UI components.
 
 ---
 
-# 17. Wallet Logic Enforcement
+# Authentication
 
-Driver cannot go online if:
+Reuse the authentication architecture defined by RideWay.
 
-wallet_balance < threshold
+Requirements:
 
-Agent must enforce:
+One AuthProvider
 
-* UI disabled state
-* warning
-* recharge flow
+One Session Restoration
 
----
+One Supabase Listener
 
-# 18. Ride State Machine Enforcement
+One Route Decision
 
-Valid transitions only:
+Driver authentication must never diverge from Rider authentication.
 
-OFFLINE → ONLINE_IDLE
-ONLINE_IDLE → REQUEST_RECEIVED
-REQUEST_RECEIVED → ACCEPTED
-ACCEPTED → NAVIGATING_TO_PICKUP
-ARRIVED → RIDE_STARTED
-RIDE_STARTED → NAVIGATING_TO_DROP
-NAVIGATING_TO_DROP → COMPLETED
-
-No skipping states.
+Only profile requirements differ.
 
 ---
 
-# 19. File Naming Rules
+# Driver Profile
 
-Screens:
-kebab-case
+Required fields:
 
-Components:
-PascalCase
+Driver Name
 
-Hooks:
-useSomething.ts
+Phone Number
 
-Stores:
-somethingStore.ts
+Email
 
----
+Vehicle Type
 
-# 20. Golden Rules
+Vehicle Model
 
-Driver app must feel:
+Vehicle Number
 
-Fast
-Minimal
-Map-first
-Uber-like
-Rapido-lightweight
+Vehicle Color
 
-Avoid:
+License Number
 
-* complex sheets
-* heavy animations
-* multiple actions
-* cluttered UI
+Profile Photo
+
+Store using authenticated Driver UUID.
+
+Never use temporary identifiers.
 
 ---
 
-End of Driver Agent
+# Driver Home
+
+Driver Home contains:
+
+Full-screen Map
+
+Floating Header
+
+Online / Offline Toggle
+
+Ride Status Card
+
+Bottom Sheet
+
+No dashboard clutter.
+
+No unnecessary analytics.
+
+No advertisements.
+
+---
+
+# Bottom Sheet
+
+Always use:
+
+@gorhom/bottom-sheet
+
+Collapsed
+
+Driver Status
+
+Today's Earnings
+
+Current Ride
+
+Expanded
+
+Ride Queue
+
+Navigation Actions
+
+Quick Controls
+
+Future Tasks
+
+Snap Points:
+
+20%
+
+45%
+
+85%
+
+Must support:
+
+Drag
+
+Expand
+
+Collapse
+
+Smooth animations
+
+---
+
+# Online / Offline State
+
+Possible states:
+
+OFFLINE
+
+ONLINE
+
+BUSY
+
+Only ONLINE drivers receive ride requests.
+
+Never allow ride requests while OFFLINE.
+
+---
+
+# Ride Request
+
+Ride request screen must display:
+
+Pickup Address
+
+Destination
+
+Distance to Pickup
+
+Estimated Ride Distance
+
+Estimated Duration
+
+Estimated Earnings
+
+Countdown Timer
+
+Accept
+
+Decline
+
+Never display placeholder rides.
+
+Never display demo data.
+
+---
+
+# Ride Lifecycle
+
+Ride States:
+
+REQUEST_RECEIVED
+
+↓
+
+ACCEPTED
+
+↓
+
+NAVIGATING_TO_PICKUP
+
+↓
+
+ARRIVED
+
+↓
+
+WAITING_FOR_PASSENGER
+
+↓
+
+RIDE_STARTED
+
+↓
+
+NAVIGATING_TO_DESTINATION
+
+↓
+
+RIDE_COMPLETED
+
+↓
+
+AVAILABLE
+
+Every state must have:
+
+Dedicated UI
+
+Dedicated backend event
+
+Dedicated driver action
+
+---
+
+# Maps
+
+Map occupies full screen.
+
+Floating components overlay map.
+
+Never place map inside scroll views.
+
+Never mount multiple map instances.
+
+Only one active navigation session.
+
+---
+
+# GPS
+
+Driver location is mission critical.
+
+Requirements:
+
+High accuracy
+
+Continuous updates
+
+Background updates
+
+Battery optimized
+
+Reconnect automatically after network interruption.
+
+---
+
+# Navigation
+
+Navigation architecture should support:
+
+Current Location
+
+Pickup Route
+
+Destination Route
+
+Voice Guidance (future)
+
+Valhalla Integration (future)
+
+Never tightly couple navigation logic with UI.
+
+---
+
+# State Management
+
+Contexts:
+
+AuthContext
+
+DriverContext
+
+RideContext
+
+LocationContext
+
+UIContext
+
+Each context owns one responsibility.
+
+Never duplicate state.
+
+---
+
+# Networking
+
+Every request must handle:
+
+Loading
+
+Success
+
+Failure
+
+Retry
+
+Timeout
+
+Offline Mode
+
+Never silently fail.
+
+---
+
+# Push Notifications
+
+Ride requests
+
+Ride cancellations
+
+System announcements
+
+Important alerts
+
+Notification handling must be centralized.
+
+---
+
+# Component Guidelines
+
+Every component has one responsibility.
+
+Examples:
+
+DriverMap
+
+RideRequestCard
+
+OnlineToggle
+
+RideBottomSheet
+
+DriverHeader
+
+VehicleCard
+
+Avoid giant screens.
+
+Split components early.
+
+---
+
+# UI Consistency
+
+Driver App follows the global RideWay Design System.
+
+Use identical:
+
+Typography
+
+Spacing
+
+Buttons
+
+Inputs
+
+Cards
+
+Colors
+
+Animations
+
+Icons
+
+Driver-specific layouts are allowed.
+
+Driver-specific styling is not.
+
+---
+
+# Performance
+
+Prioritize:
+
+Fast startup
+
+Low battery usage
+
+Efficient GPS updates
+
+Minimal re-renders
+
+Lazy loading
+
+Avoid unnecessary polling.
+
+---
+
+# Security
+
+Never trust client input.
+
+Backend owns:
+
+Ride assignment
+
+Pricing
+
+Driver availability
+
+Ride validation
+
+The Driver App only displays backend decisions.
+
+---
+
+# Error Handling
+
+Every failure must provide:
+
+Clear message
+
+Recovery option
+
+Retry when appropriate
+
+Never leave drivers without feedback.
+
+---
+
+# Logging
+
+Development:
+
+Meaningful logs only.
+
+Production:
+
+Remove debug logging.
+
+Never expose sensitive information.
+
+---
+
+# Backend Ownership
+
+The Driver App must NEVER decide:
+
+Which ride to receive
+
+Pricing
+
+Commission
+
+Matching
+
+Ride eligibility
+
+Fraud detection
+
+The backend is authoritative.
+
+---
+
+# Shared Code Policy
+
+Reuse shared:
+
+Components
+
+Theme
+
+Services
+
+Hooks
+
+Utilities
+
+Types
+
+Never duplicate code from Rider App.
+
+Extract reusable functionality into shared modules.
+
+---
+
+# Future Features
+
+Architecture should support:
+
+Scheduled Rides
+
+Multi-stop Trips
+
+Driver Wallet
+
+Bonuses
+
+Heatmaps
+
+Ride Reservations
+
+EV Charging
+
+Fleet Management
+
+Without major refactoring.
+
+---
+
+# Before Implementing Any Feature
+
+Verify:
+
+Can this reuse an existing component?
+
+Does it duplicate business logic?
+
+Does it follow the RideWay Design System?
+
+Does it improve architecture?
+
+Does it reduce driver effort?
+
+---
+
+# Code Review Checklist
+
+Before completing any task verify:
+
+✓ No duplicated logic
+
+✓ No duplicated state
+
+✓ No hardcoded data
+
+✓ No placeholder UI
+
+✓ No demo rides
+
+✓ No unnecessary re-renders
+
+✓ Proper error handling
+
+✓ Correct state ownership
+
+✓ Clean component boundaries
+
+✓ Documentation updated
+
+---
+
+# Final Principle
+
+The Driver App is an operational tool, not a showcase.
+
+Every screen should answer one question:
+
+"What is the next action the driver needs to take?"
+
+If the UI does not make that answer immediately obvious, redesign it.
+
+The Driver App should feel reliable enough that a professional driver can depend on it throughout an entire working day.

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useDriverStore } from '../../store/driverStore';
 import { useRideStore } from '../../store/rideStore';
@@ -61,7 +62,8 @@ export default function PickupNavigationScreen() {
 
         <View style={styles.actions}>
           <TouchableOpacity style={styles.callButton}>
-            <Text style={styles.callText}>📞 Call Rider</Text>
+            <Ionicons name="call-outline" size={18} color={colors.text} style={{ marginRight: 6 }} />
+            <Text style={styles.callText}>Call Rider</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>

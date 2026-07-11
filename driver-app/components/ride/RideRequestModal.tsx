@@ -63,7 +63,7 @@ export default function RideRequestModal({ request, onAccept, onReject }: RideRe
             </View>
             <View style={styles.fareItem}>
               <Text style={styles.fareLabel}>Rider Rating</Text>
-              <Text style={styles.fareValue}>⭐ {request.rider_rating}</Text>
+              <Text style={styles.fareValue}>{request.rider_rating.toFixed(1)}</Text>
             </View>
           </View>
 

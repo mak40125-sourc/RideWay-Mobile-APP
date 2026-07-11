@@ -1,6 +1,49 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants";
+import { Platform } from "react-native";
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:3000/api/v1";
+const API_PATH = "/api/v1";
+
+function normalizeApiBaseUrl(url: string) {
+  return url.replace(/\/$/, "");
+}
+
+function getExpoHost() {
+  const constants = Constants as typeof Constants & {
+    expoGoConfig?: { debuggerHost?: string };
+    manifest?: { debuggerHost?: string };
+  };
+
+  const hostUri =
+    Constants.expoConfig?.hostUri ||
+    constants.expoGoConfig?.debuggerHost ||
+    constants.manifest?.debuggerHost;
+
+  return hostUri?.split(":")[0];
+}
+
+function getApiBaseUrl() {
+  const configuredUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+
+  if (configuredUrl) {
+    return normalizeApiBaseUrl(configuredUrl);
+  }
+
+  const host = getExpoHost();
+
+  if (host) {
+    return `http://${host}:3000${API_PATH}`;
+  }
+
+  const fallbackHost = Platform.OS === "android" ? "10.0.2.2" : "localhost";
+  return `http://${fallbackHost}:3000${API_PATH}`;
+}
+
+const API_BASE_URL = getApiBaseUrl();
+
+if (__DEV__) {
+  console.log("RideWay API base URL:", API_BASE_URL);
+}
 
 const TOKEN_KEY = "supabase_token";
 
@@ -38,11 +81,19 @@ async function request<T>(
   const url = `${API_BASE_URL}${endpoint}`;
   const headers = await getHeaders();
 
-  const response = await fetch(url, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    throw new Error(
+      `Network request failed for ${url}. Make sure the backend is running and reachable from this device.`
+    );
+  }
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => null);

@@ -15,7 +15,6 @@ interface WalletState {
   setTransactions: (transactions: WalletTransaction[]) => void;
   setLoading: (loading: boolean) => void;
   getIsLowBalance: () => boolean;
-  deductCommission: (amount: number) => void;
 }
 
 export const useWalletStore = create<WalletState>()(
@@ -33,9 +32,6 @@ export const useWalletStore = create<WalletState>()(
       setTransactions: (transactions) => set({ transactions }),
       setLoading: (loading) => set({ is_loading: loading }),
       getIsLowBalance: () => get().balance < MINIMUM_BALANCE,
-      deductCommission: (amount) => set((state) => ({
-        balance: Math.max(0, state.balance - amount),
-      })),
     }),
     {
       name: 'wallet-storage',
