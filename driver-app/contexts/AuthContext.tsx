@@ -5,7 +5,7 @@ import { clearAuthToken, setAuthToken } from "../services/api";
 
 type AuthContextType = {
   authUser: User | null;
-  user: UserProfile | null;
+  user: UserProfile | null | undefined;
   loading: boolean;
   isAuthenticated: boolean;
   refreshProfile: () => Promise<void>;
@@ -14,7 +14,7 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType>({
   authUser: null,
-  user: null,
+  user: undefined,
   loading: true,
   isAuthenticated: false,
   refreshProfile: async () => {},
@@ -23,7 +23,7 @@ const AuthContext = createContext<AuthContextType>({
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [authUser, setAuthUser] = useState<User | null>(null);
-  const [user, setUser] = useState<UserProfile | null>(null);
+  const [user, setUser] = useState<UserProfile | null | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const lastAppliedAccessToken = useRef<string | null>(null);
   const sessionVersion = useRef(0);

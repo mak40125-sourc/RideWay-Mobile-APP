@@ -80,6 +80,8 @@ async function request<T>(
   const url = `${API_BASE_URL}${endpoint}`;
   const headers = await getHeaders();
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
   let response: Response;
 
   try {
@@ -87,11 +89,17 @@ async function request<T>(
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
     });
-  } catch {
+  } catch (err) {
+    if (controller.signal.aborted) {
+      throw new Error(`Request timed out for ${url}. Check backend IP and connectivity.`);
+    }
     throw new Error(
       `Network request failed for ${url}. Make sure the backend is running and reachable from this device.`
     );
+  } finally {
+    clearTimeout(timeout);
   }
 
   if (!response.ok) {

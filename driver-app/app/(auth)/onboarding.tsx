@@ -25,21 +25,29 @@ export default function OnboardingScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setAuthChecked(true), 120);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (!loading && isAuthenticated && user !== undefined) {
+      if (user?.full_name) {
+        router.replace("/(driver)/home");
+      } else {
+        router.replace("/(auth)/kyc");
+      }
+    }
+  }, [isAuthenticated, loading, user]);
+
+  if (!authChecked) return null;
 
   const isValid =
     mode === "signin"
       ? email.trim().length > 0 && password.length > 0
       : name.trim().length >= 2 && email.trim().length > 0 && password.length >= 6;
-
-  useEffect(() => {
-    if (!loading) {
-      if (isAuthenticated && user?.full_name) {
-        router.replace("/(driver)/home");
-      } else if (isAuthenticated && !user?.full_name) {
-        router.replace("/(auth)/kyc");
-      }
-    }
-  }, [isAuthenticated, loading, user]);
 
   const handleSignIn = async () => {
     if (submitting) return;

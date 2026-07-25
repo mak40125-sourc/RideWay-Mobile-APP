@@ -12,6 +12,10 @@ export default function RootLayout() {
     "NeueMontreal-Bold": require("../assets/fonts/NeueMontreal-Bold.ttf"),
     "NeueMontreal-Italic": require("../assets/fonts/NeueMontreal-Italic.ttf"),
     "NeueMontreal-BoldItalic": require("../assets/fonts/NeueMontreal-BoldItalic.ttf"),
+    "GeneralSans-Regular": require("../assets/fonts/GeneralSans-Regular.otf"),
+    "GeneralSans-Medium": require("../assets/fonts/GeneralSans-Medium.otf"),
+    "GeneralSans-Semibold": require("../assets/fonts/GeneralSans-Semibold.otf"),
+    "GeneralSans-Bold": require("../assets/fonts/GeneralSans-Bold.otf"),
   });
 
   useEffect(() => {

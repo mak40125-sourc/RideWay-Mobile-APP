@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator, Text, Dimensions, ScrollView } from 'react-native';
 import MapView from 'react-native-maps';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import { useDriverStore } from '../../store/driverStore';
 import { useWalletStore } from '../../store/walletStore';
 import { useDriverLocation } from '../../hooks/useDriverLocation';
@@ -13,6 +15,8 @@ import OnlineToggle from '../../components/driver/OnlineToggle';
 import EarningsCard from '../../components/driver/EarningsCard';
 import RideStatusCard from '../../components/driver/RideStatusCard';
 import WalletWarning from '../../components/wallet/WalletWarning';
+import MenuButton from '../../components/driver/MenuButton';
+import SideMenu from '../../components/driver/SideMenu';
 import { colors } from '../../constants/theme';
 import { WALLET_MINIMUM } from '../../constants/wallet';
 
@@ -22,12 +26,15 @@ const BOTTOM_PANEL_HEIGHT = SCREEN_HEIGHT * 0.35;
 export default function DriverHomeScreen() {
   const router = useRouter();
   const mapRef = useRef<MapView>(null);
-  const { driver, is_online, setDriver, setOnline, setStatus } = useDriverStore();
+  const { driver, is_online, setDriver, setOnline, setStatus, logout } = useDriverStore();
   const { balance } = useWalletStore();
   const { startTracking, stopTracking, isTracking } = useDriverLocation();
-  const { user } = useAuth();
+  const { user, authUser } = useAuth();
+  const insets = useSafeAreaInsets();
   const [fetching, setFetching] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const contentOffset = useSharedValue(0);
   const [initialRegion] = useState({
     latitude: 12.9716,
     longitude: 77.5946,
@@ -36,7 +43,10 @@ export default function DriverHomeScreen() {
   });
 
   const fetchData = useCallback(() => {
-    if (!user) return;
+    if (!authUser) {
+      router.replace('/(auth)/login');
+      return;
+    }
     setFetching(true);
     setFetchError(null);
     driverAPI.getMyProfile()
@@ -53,7 +63,7 @@ export default function DriverHomeScreen() {
       .finally(() => {
         setFetching(false);
       });
-  }, [user, router, setDriver]);
+  }, [authUser, router, setDriver]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -91,6 +101,38 @@ export default function DriverHomeScreen() {
     }
   }, [setOnline, setStatus]);
 
+  const handleMenuToggle = useCallback(() => {
+    setIsMenuOpen((prev) => !prev);
+  }, []);
+
+  const handleMenuClose = useCallback(() => {
+    setIsMenuOpen(false);
+  }, []);
+
+  const handleMenuNavigate = useCallback((route: string) => {
+    setIsMenuOpen(false);
+    setTimeout(() => router.push(route as any), 350);
+  }, [router]);
+
+  const handleLogout = useCallback(() => {
+    setIsMenuOpen(false);
+    setTimeout(() => {
+      logout();
+      router.replace('/(auth)/login');
+    }, 350);
+  }, [logout, router]);
+
+  const contentAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: contentOffset.value }],
+  }));
+
+  useEffect(() => {
+    contentOffset.value = withTiming(isMenuOpen ? 60 : 0, {
+      duration: 350,
+      easing: Easing.bezier(0.16, 1, 0.3, 1),
+    });
+  }, [isMenuOpen, contentOffset]);
+
   if (fetching) {
     return (
       <View style={styles.loadingContainer}>
@@ -119,33 +161,45 @@ export default function DriverHomeScreen() {
   if (driver.kyc_status === 'verified' && driver.is_verified) {
     return (
       <View style={styles.container}>
-        <MapView
-          ref={mapRef}
-          style={styles.map}
-          showsUserLocation
-          showsMyLocationButton={false}
-          initialRegion={initialRegion}
-        />
+        <Animated.View style={[StyleSheet.absoluteFill, contentAnimatedStyle]}>
+          <MapView
+            ref={mapRef}
+            style={styles.map}
+            showsUserLocation
+            showsMyLocationButton={true}
+            mapPadding={{ top: insets.top, right: 0, bottom: 0, left: 0 }}
+            initialRegion={initialRegion}
+          />
 
-        <View style={styles.overlayHeader}>
+          <View style={styles.bottomPanel}>
+            <View style={styles.handle} />
+            <ScrollView
+              style={styles.panelScroll}
+              contentContainerStyle={styles.panelContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <DriverStatusCard onToggle={handleToggleOnline} />
+              <View style={styles.midSection}>
+                <EarningsCard />
+                <RideStatusCard />
+                {balance < WALLET_MINIMUM && <WalletWarning balance={balance} />}
+              </View>
+            </ScrollView>
+          </View>
+        </Animated.View>
+
+        <View style={[styles.onlineToggleContainer, { top: insets.top + 16 }]}>
           <OnlineToggle onToggle={handleToggleOnline} />
         </View>
 
-        <View style={styles.bottomPanel}>
-          <View style={styles.handle} />
-          <ScrollView
-            style={styles.panelScroll}
-            contentContainerStyle={styles.panelContent}
-            showsVerticalScrollIndicator={false}
-          >
-            <DriverStatusCard onToggle={handleToggleOnline} />
-            <View style={styles.midSection}>
-              <EarningsCard />
-              <RideStatusCard />
-              {balance < WALLET_MINIMUM && <WalletWarning balance={balance} />}
-            </View>
-          </ScrollView>
-        </View>
+        <MenuButton onPress={handleMenuToggle} />
+        <SideMenu
+          isOpen={isMenuOpen}
+          onClose={handleMenuClose}
+          onNavigate={handleMenuNavigate}
+          onLogout={handleLogout}
+          driverName={user?.full_name}
+        />
       </View>
     );
   }
@@ -171,9 +225,8 @@ const styles = StyleSheet.create({
   map: {
     ...StyleSheet.absoluteFillObject,
   },
-  overlayHeader: {
+  onlineToggleContainer: {
     position: 'absolute',
-    top: 60,
     right: 20,
     zIndex: 10,
   },

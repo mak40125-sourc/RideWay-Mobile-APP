@@ -19,7 +19,7 @@ type DocumentKey = (typeof REQUIRED_DOCUMENTS)[number]['key'];
 
 export default function KYCUploadScreen() {
   const router = useRouter();
-  const { authUser } = useAuth();
+  const { authUser, user } = useAuth();
   const { addKYCDocument } = useDriverStore();
   const [uploading, setUploading] = useState<DocumentKey | null>(null);
   const [uploaded, setUploaded] = useState<Record<string, boolean>>({});
@@ -27,6 +27,8 @@ export default function KYCUploadScreen() {
   const allUploaded = REQUIRED_DOCUMENTS.every((doc) => uploaded[doc.key]);
 
   useEffect(() => {
+    if (user === undefined || user === null) return;
+
     (async () => {
       try {
         const existing = await driverAPI.getMyProfile();
@@ -36,10 +38,10 @@ export default function KYCUploadScreen() {
           router.replace('/(auth)/registration-pending');
         }
       } catch {
-        // 404 — no profile yet, stay on KYC
+        router.replace('/(auth)/vehicle');
       }
     })();
-  }, []);
+  }, [user]);
 
   const handleUpload = async (key: string) => {
     if (!authUser) return;

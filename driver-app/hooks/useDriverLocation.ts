@@ -48,6 +48,8 @@ export const useDriverLocation = () => {
   };
 
   useEffect(() => {
+    Location.requestForegroundPermissionsAsync().catch(() => {});
+
     return () => {
       stopTracking();
     };

@@ -1,14 +1,21 @@
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, fontSize, fontWeight } from '../../constants/theme';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
-const SETTINGS_SECTIONS = [
+interface SettingsItem {
+  label: string;
+  icon: IconName;
+  route?: string;
+}
+
+const SETTINGS_SECTIONS: { section: string; items: SettingsItem[] }[] = [
   {
     section: 'Account',
     items: [
-      { label: 'Edit Profile', icon: 'person-outline' as IconName },
+      { label: 'Edit Profile', icon: 'person-outline' as IconName, route: '/(tabs)/profile' },
       { label: 'Change Password', icon: 'lock-closed-outline' as IconName },
       { label: 'Language', icon: 'globe-outline' as IconName },
     ],
@@ -32,6 +39,14 @@ const SETTINGS_SECTIONS = [
 ];
 
 export default function SettingsScreen() {
+  const router = useRouter();
+
+  const handleItemPress = (item: SettingsItem) => {
+    if (item.route) {
+      router.push(item.route as any);
+    }
+  };
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Settings</Text>
@@ -40,7 +55,12 @@ export default function SettingsScreen() {
         <View key={sIndex} style={styles.section}>
           <Text style={styles.sectionTitle}>{section.section}</Text>
           {section.items.map((item, iIndex) => (
-            <TouchableOpacity key={iIndex} style={styles.menuItem}>
+            <TouchableOpacity
+              key={iIndex}
+              style={styles.menuItem}
+              onPress={() => handleItemPress(item)}
+              activeOpacity={item.route ? 0.6 : 1}
+            >
               <Ionicons name={item.icon} size={20} color={colors.text} style={styles.menuIcon} />
               <Text style={styles.menuLabel}>{item.label}</Text>
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />

@@ -67,7 +67,18 @@ Redis holds live state:
 PostgreSQL holds system of record:
 - Drivers, rides (only after acceptance), wallet, payments, ratings
 
-Phase 4: Wallet System (NOT STARTED)
+Phase 4: Side Menu Redesign (COMPLETED)
+UI-only redesign of the driver side menu with Flow Motion principles.
+- General Sans font loaded (Regular, Medium, Semibold, Bold variants)
+- MenuButton component: floating 48×48 square, 16px radius, #FFF, soft shadow, 3 hamburger lines, press animation (scale 0.96 → spring back)
+- SideMenu component: 280dp panel slides from left with bezier-eased timing (350ms enter, 250ms exit)
+- Windows Phone-inspired interaction: home content shifts 60dp right when menu opens, map remains visible underneath
+- Flow Motion staggered entrance: greeting → divider → 5 items → logout, each with 60ms stagger via FadeIn.delay
+- 6 menu items: Driver Profile, Ride History, Earnings, Settings, Help & Support, Logout
+- Settings screen restored: "Edit Profile" now navigates to profile screen
+- Clean typography (General Sans), generous whitespace, minimal separators, no clutter
+
+Phase 5: Wallet System (NOT STARTED)
 Readiness: ~10%
 Wallet store exists with balance/transactions
 Backend wallet controller exists (commission deduction)
@@ -75,9 +86,28 @@ No recharge flow connected
 No commission display on ride completion
 Low balance prevention for going online is in place (checked in DriverStatusCard)
 
+Bug Fixes & Polish (Completed)
+Auth timing race:
+- AuthContext: user initial state null → undefined (distinguishes "not loaded" from "no profile")
+- Onboarding: guards with user !== undefined before redirect; uses full_name (matches DB column)
+- KYC: guards user === undefined || null; catch → vehicle redirect for re-registration; [user] dep re-runs when profile loads
+- Home: fetchData uses authUser (set immediately from session) instead of user (profile, async); added router.replace('/(auth)/login') for !authUser
+
+Network reliability:
+- api.ts: 10s AbortController timeout on all fetch() calls to prevent infinite spinners
+- .env + driver-app.env: backend IP corrected to 10.11.203.124:3000 (Wi-Fi)
+
+Map & location:
+- showsMyLocationButton={true} enabled on MapView
+- mapPadding={{ top: insets.top }} for status bar clearance
+- Location permissions requested on mount in useDriverLocation hook
+
+Login flash:
+- Onboarding: 120ms authChecked guard prevents login form flash before session restore
+
 Key Decisions Made
 Decision        Choice              Reason
-Font            NeueMontreal only   User explicit, matches Rider App
+Font            General Sans + NeueMontreal  General Sans for menu/sidebar; NeueMontreal for ride screens and existing UI
 Bottom sheet    Custom (no @gorhom) @gorhom conflicts with MapView SurfaceView on Android
 Map             react-native-maps   Same as Rider App
 State           Zustand (domain) + Context (auth)  Existing pattern
