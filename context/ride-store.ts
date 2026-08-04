@@ -52,7 +52,7 @@ type RideActions = {
     path: Coordinates[];
   }) => void;
   setSelectedOption: (option: RideOption, fare: number) => void;
-  requestRideAction: (userId: string) => Promise<void>;
+  requestRideAction: (userId: string, options?: { navigateToTracking?: boolean }) => Promise<void>;
   setStatus: (status: RideStatus) => void;
   setRideId: (id: string) => void;
   simulateDriverAssignment: () => void;
@@ -92,7 +92,8 @@ export const useRideStore = create<RideState & RideActions>((set, get) => ({
         : null,
     })),
 
-  requestRideAction: async (userId) => {
+  requestRideAction: async (userId, options) => {
+    const { navigateToTracking = true } = options ?? {};
     const state = get();
     if (!state.trip) {
       set({ error: "Trip details are incomplete" });
@@ -111,16 +112,18 @@ export const useRideStore = create<RideState & RideActions>((set, get) => ({
         fare,
         distance,
         duration,
-        vehicleType: option.label.toLowerCase(),
+        vehicleType: option.vehicleType ?? option.label.toLowerCase(),
       });
 
       set({
-        rideId: result.ride.id,
+        rideId: result.rideId,
         status: "SEARCHING_DRIVER",
         requesting: false,
       });
 
-      router.push("/tracking");
+      if (navigateToTracking) {
+        router.push("/tracking");
+      }
     } catch (error) {
       set({
         status: "IDLE",

@@ -22,6 +22,12 @@ interface HomeState {
 
   selectedOption: RideOption;
 
+  searchMode: "destination" | "pickup";
+  pickupQuery: string;
+  pickupResults: SearchResult[];
+  isSearchingPickup: boolean;
+  selectedPickup: SearchResult | null;
+
   setLocation: (location: Coordinates | null) => void;
   setPermissionDenied: (denied: boolean) => void;
   setLoadingLocation: (loading: boolean) => void;
@@ -34,6 +40,11 @@ interface HomeState {
   setLoadingEstimate: (loading: boolean) => void;
   setSelectedOption: (option: RideOption) => void;
   resetDestination: () => void;
+  setSearchMode: (mode: "destination" | "pickup") => void;
+  setPickupQuery: (query: string) => void;
+  setPickupResults: (results: SearchResult[]) => void;
+  setIsSearchingPickup: (searching: boolean) => void;
+  setSelectedPickup: (pickup: SearchResult | null) => void;
 }
 
 export const useHomeStore = create<HomeState>((set) => ({
@@ -56,6 +67,12 @@ export const useHomeStore = create<HomeState>((set) => ({
 
   selectedOption: rideOptions[0],
 
+  searchMode: "destination",
+  pickupQuery: "",
+  pickupResults: [],
+  isSearchingPickup: false,
+  selectedPickup: null,
+
   setLocation: (location) => set({ location }),
   setPermissionDenied: (denied) => set({ permissionDenied: denied }),
   setLoadingLocation: (loading) => set({ loadingLocation: loading }),
@@ -68,4 +85,9 @@ export const useHomeStore = create<HomeState>((set) => ({
   setLoadingEstimate: (loading) => set({ loadingEstimate: loading }),
   setSelectedOption: (option) => set({ selectedOption: option }),
   resetDestination: () => set({ selectedDestination: null, estimate: null, query: "" }),
+  setSearchMode: (mode) => set({ searchMode: mode }),
+  setPickupQuery: (query) => set({ pickupQuery: query }),
+  setPickupResults: (results) => set({ pickupResults: results }),
+  setIsSearchingPickup: (searching) => set({ isSearchingPickup: searching }),
+  setSelectedPickup: (pickup) => set({ selectedPickup: pickup }),
 }));

@@ -90,6 +90,8 @@ exports.register = async (req, res) => {
       return res.status(409).json({ error: 'Driver profile already exists' });
     }
 
+    await driverService.ensureProfile(userId, req.user.email);
+
     const driver = await driverService.createDriver(userId, {
       vehicle_type,
       vehicle_number,

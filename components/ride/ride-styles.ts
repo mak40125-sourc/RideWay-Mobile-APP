@@ -51,7 +51,7 @@ export const rideStyles = StyleSheet.create({
   driverBubbleText: {
     color: "#f8f4ee",
     fontSize: 11,
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Bold",
   },
   topBar: {
     position: "absolute",
@@ -65,13 +65,13 @@ export const rideStyles = StyleSheet.create({
   topBarTitle: {
     color: "#ffffff",
     fontSize: 28,
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Bold",
   },
   topBarSubtitle: {
     color: "rgba(255,255,255,0.82)",
     fontSize: 14,
     marginTop: 4,
-    fontFamily: "NeueMontreal-Regular",
+    fontFamily: "GeneralSans-Regular",
   },
   badge: {
     backgroundColor: "#f7c948",
@@ -82,7 +82,7 @@ export const rideStyles = StyleSheet.create({
   badgeText: {
     color: "#1f2937",
     fontSize: 13,
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Bold",
   },
   card: {
     position: "absolute",
@@ -120,13 +120,13 @@ export const rideStyles = StyleSheet.create({
     color: "#111111",
     fontSize: 24,
     marginBottom: 2,
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Bold",
   },
   subtitle: {
     color: "#6b7280",
     fontSize: 13,
     marginBottom: 10,
-    fontFamily: "NeueMontreal-Regular",
+    fontFamily: "GeneralSans-Regular",
   },
   optionsList: {
     gap: 8,
@@ -169,7 +169,7 @@ export const rideStyles = StyleSheet.create({
     fontSize: 12,
     color: "#0d141c",
     letterSpacing: 0.6,
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Bold",
   },
   optionCopy: {
     flex: 1,
@@ -178,18 +178,18 @@ export const rideStyles = StyleSheet.create({
   optionTitle: {
     color: "#111111",
     fontSize: 16,
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Bold",
   },
   optionDescription: {
     color: "#6b7280",
     fontSize: 13,
     marginTop: 3,
-    fontFamily: "NeueMontreal-Regular",
+    fontFamily: "GeneralSans-Regular",
   },
   optionFare: {
     color: "#111111",
     fontSize: 16,
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Bold",
   },
   sheetFooter: {
     paddingTop: 10,
@@ -210,14 +210,14 @@ export const rideStyles = StyleSheet.create({
   primaryButtonText: {
     color: "#f8f4ee",
     fontSize: 14,
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Bold",
   },
   back: {
     color: "#111111",
     marginTop: 10,
     textAlign: "center",
     fontSize: 13,
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Bold",
   },
   backDisabled: {
     opacity: 0.4,
@@ -262,20 +262,20 @@ export const rideStyles = StyleSheet.create({
     color: "#8b5e3c",
     fontSize: 12,
     textTransform: "uppercase",
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Bold",
   },
   sectionTitle: {
     color: "#0d141c",
     fontSize: 20,
     marginTop: 8,
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Bold",
   },
   sectionText: {
     color: "#4b5563",
     fontSize: 14,
     lineHeight: 20,
     marginTop: 8,
-    fontFamily: "NeueMontreal-Regular",
+    fontFamily: "GeneralSans-Regular",
   },
   statsRow: {
     flexDirection: "row",
@@ -291,7 +291,7 @@ export const rideStyles = StyleSheet.create({
     color: "#0d141c",
     fontSize: 20,
     marginTop: 6,
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Bold",
   },
   compactStatsRow: {
     flexDirection: "row",
@@ -308,7 +308,7 @@ export const rideStyles = StyleSheet.create({
     color: "#0d141c",
     fontSize: 18,
     marginTop: 6,
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Bold",
   },
   detailRow: {
     flexDirection: "row",
@@ -321,12 +321,12 @@ export const rideStyles = StyleSheet.create({
   detailLabel: {
     color: "#6b7280",
     fontSize: 14,
-    fontFamily: "NeueMontreal-Regular",
+    fontFamily: "GeneralSans-Regular",
   },
   detailValue: {
     color: "#0d141c",
     fontSize: 15,
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Bold",
   },
   timeline: {
     gap: 12,
@@ -341,14 +341,14 @@ export const rideStyles = StyleSheet.create({
   timelineTitle: {
     color: "#0d141c",
     fontSize: 16,
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Bold",
   },
   timelineText: {
     color: "#4b5563",
     fontSize: 14,
     lineHeight: 20,
     marginTop: 6,
-    fontFamily: "NeueMontreal-Regular",
+    fontFamily: "GeneralSans-Regular",
   },
   stateScreen: {
     flex: 1,
@@ -362,7 +362,7 @@ export const rideStyles = StyleSheet.create({
     fontSize: 28,
     textAlign: "center",
     marginTop: 18,
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Bold",
   },
   stateText: {
     color: "#6b7280",
@@ -370,6 +370,6 @@ export const rideStyles = StyleSheet.create({
     lineHeight: 22,
     textAlign: "center",
     marginTop: 10,
-    fontFamily: "NeueMontreal-Regular",
+    fontFamily: "GeneralSans-Regular",
   },
 });

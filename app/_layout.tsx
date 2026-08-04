@@ -13,10 +13,11 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [loaded] = useFonts({
-    "NeueMontreal-Regular": require("../assets/fonts/NeueMontreal-Regular.ttf"),
-    "NeueMontreal-Bold": require("../assets/fonts/NeueMontreal-Bold.ttf"),
-    "NeueMontreal-Italic": require("../assets/fonts/NeueMontreal-Italic.ttf"),
-    "NeueMontreal-BoldItalic": require("../assets/fonts/NeueMontreal-BoldItalic.ttf"),
+    "GeneralSans-Regular": require("../assets/fonts/GeneralSans-Regular.otf"),
+    "GeneralSans-Medium": require("../assets/fonts/GeneralSans-Medium.otf"),
+    "GeneralSans-Bold": require("../assets/fonts/GeneralSans-Bold.otf"),
+    "GeneralSans-Italic": require("../assets/fonts/GeneralSans-Italic.otf"),
+    "GeneralSans-BoldItalic": require("../assets/fonts/GeneralSans-BoldItalic.otf"),
   });
 
   useEffect(() => {
@@ -58,13 +59,25 @@ function RootNavigator() {
     return <ProfileCreationScreen onComplete={refreshProfile} />;
   }
 
+  const deepScreenOptions = {
+    contentStyle: { backgroundColor: "#FFFFFF" },
+  };
+
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack screenOptions={{ headerShown: false, animation: "none" }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="ride" />
       <Stack.Screen name="confirm" />
       <Stack.Screen name="tracking" />
       <Stack.Screen name="complete" />
+      <Stack.Screen name="personal-info" options={deepScreenOptions} />
+      <Stack.Screen name="ride-history" options={deepScreenOptions} />
+      <Stack.Screen name="saved-places" options={deepScreenOptions} />
+      <Stack.Screen name="emergency-contacts" options={deepScreenOptions} />
+      <Stack.Screen name="notifications" options={deepScreenOptions} />
+      <Stack.Screen name="help" options={deepScreenOptions} />
+      <Stack.Screen name="privacy" options={deepScreenOptions} />
+      <Stack.Screen name="about" options={deepScreenOptions} />
     </Stack>
   );
 }

@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { useEffect } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Alert, Text, View } from "react-native";
 
 import { useAuth } from "../../context/auth-context";
 import { useRideStore, type RideStatus } from "../../context/ride-store";
@@ -9,6 +9,8 @@ import { DriverMatchingView } from "./driver-matching-view";
 import { RideMap } from "./ride-map";
 import { rideStyles as styles } from "./ride-styles";
 import { RideTopBar } from "./ride-top-bar";
+import { FlowView } from "../flow/FlowView";
+import { PressableScale } from "../flow/PressableScale";
 
 export function RideTrackingScreen() {
   const { user } = useAuth();
@@ -103,74 +105,74 @@ export function RideTrackingScreen() {
   const isSearching = status === "REQUESTING" || status === "SEARCHING_DRIVER";
 
   return (
-    <View style={styles.screen}>
-      <RideMap pickup={trip.pickup} dropoff={trip.dropoff} region={region} routePath={trip.path} showDriverMotion />
+    <FlowView>
+      <View style={styles.screen}>
+        <RideMap pickup={trip.pickup} dropoff={trip.dropoff} region={region} routePath={trip.path} showDriverMotion />
 
-      {isSearching ? (
-        <>
-          <RideTopBar title="Finding your driver" subtitle="Looking for nearby drivers to accept your ride." />
-          <DriverMatchingView
-            vehicleLabel={trip.option.label}
-            fare={trip.fare}
-            onCancel={handleCancelRide}
-          />
-        </>
-      ) : (
-        <>
-          <RideTopBar title={statusInfo.title} subtitle={statusInfo.subtitle} />
+        {isSearching ? (
+          <>
+            <RideTopBar title="Finding your driver" subtitle="Looking for nearby drivers to accept your ride." />
+            <DriverMatchingView
+              vehicleLabel={trip.option.label}
+              fare={trip.fare}
+              onCancel={handleCancelRide}
+            />
+          </>
+        ) : (
+          <>
+            <RideTopBar title={statusInfo.title} subtitle={statusInfo.subtitle} />
 
-          <View style={styles.compactCard}>
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionLabel}>Driver status</Text>
-              <Text style={styles.sectionTitle}>
-                {hasDriver
-                  ? `Driver assigned for ${trip.option.label}`
-                  : status === "RIDE_COMPLETED"
-                  ? "Trip completed"
-                  : `Searching for ${trip.option.label}`}
-              </Text>
-              <Text style={styles.sectionText}>
-                {status === "RIDE_COMPLETED"
-                  ? "You have reached your destination."
-                  : "Your driver is on the way to your pickup location."}
-              </Text>
-            </View>
-
-            <View style={styles.compactStatsRow}>
-              <View style={styles.compactStat}>
-                <Text style={styles.sectionLabel}>Fare</Text>
-                <Text style={styles.compactStatValue}>Rs {trip.fare}</Text>
+            <View style={styles.compactCard}>
+              <View style={styles.sectionCard}>
+                <Text style={styles.sectionLabel}>Driver status</Text>
+                <Text style={styles.sectionTitle}>
+                  {hasDriver
+                    ? `Driver assigned for ${trip.option.label}`
+                    : status === "RIDE_COMPLETED"
+                    ? "Trip completed"
+                    : `Searching for ${trip.option.label}`}
+                </Text>
+                <Text style={styles.sectionText}>
+                  {status === "RIDE_COMPLETED"
+                    ? "You have reached your destination."
+                    : "Your driver is on the way to your pickup location."}
+                </Text>
               </View>
-              <View style={styles.compactStat}>
-                <Text style={styles.sectionLabel}>Status</Text>
-                <Text style={styles.compactStatValue}>{status.replace(/_/g, " ")}</Text>
+
+              <View style={styles.compactStatsRow}>
+                <View style={styles.compactStat}>
+                  <Text style={styles.sectionLabel}>Fare</Text>
+                  <Text style={styles.compactStatValue}>Rs {trip.fare}</Text>
+                </View>
+                <View style={styles.compactStat}>
+                  <Text style={styles.sectionLabel}>Status</Text>
+                  <Text style={styles.compactStatValue}>{status.replace(/_/g, " ")}</Text>
+                </View>
               </View>
+
+              {status === "RIDE_STARTED" && (
+                <PressableScale style={styles.primaryButton} onPress={handleCompleteRide}>
+                  <Text style={styles.primaryButtonText}>End ride</Text>
+                </PressableScale>
+              )}
+
+              {status !== "RIDE_COMPLETED" && status !== "RIDE_STARTED" && (
+                <PressableScale onPress={handleCancelRide}>
+                  <Text style={[styles.back, { color: "#dc2626" }]}>Cancel this ride</Text>
+                </PressableScale>
+              )}
+
+              {status === "RIDE_COMPLETED" && (
+                <PressableScale
+                  style={styles.primaryButton}
+                  onPress={handleCompleteRide}>
+                  <Text style={styles.primaryButtonText}>View trip summary</Text>
+                </PressableScale>
+              )}
             </View>
-
-            {status === "RIDE_STARTED" && (
-              <Pressable
-                style={styles.primaryButton}
-                onPress={handleCompleteRide}>
-                <Text style={styles.primaryButtonText}>End ride</Text>
-              </Pressable>
-            )}
-
-            {status !== "RIDE_COMPLETED" && status !== "RIDE_STARTED" && (
-              <Pressable onPress={handleCancelRide}>
-                <Text style={[styles.back, { color: "#dc2626" }]}>Cancel this ride</Text>
-              </Pressable>
-            )}
-
-            {status === "RIDE_COMPLETED" && (
-              <Pressable
-                style={styles.primaryButton}
-                onPress={handleCompleteRide}>
-                <Text style={styles.primaryButtonText}>View trip summary</Text>
-              </Pressable>
-            )}
-          </View>
-        </>
-      )}
-    </View>
+          </>
+        )}
+      </View>
+    </FlowView>
   );
 }

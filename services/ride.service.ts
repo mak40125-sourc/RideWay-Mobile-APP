@@ -28,7 +28,7 @@ export type Ride = {
 };
 
 export type RideRequestResult = {
-  ride: Ride;
+  rideId: string;
   candidateCount: number;
 };
 
@@ -50,4 +50,8 @@ export async function cancelRide(rideId: string): Promise<Ride> {
 
 export async function getRiderActiveRide(riderId: string): Promise<Ride | null> {
   return api.get<Ride | null>(`/rides/rider/${riderId}/active`);
+}
+
+export async function getRiderRideHistory(riderId: string): Promise<Ride[]> {
+  return api.get<Ride[]>(`/rides/rider/${riderId}/history`);
 }

@@ -134,3 +134,21 @@ exports.getRiderActiveRide = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+exports.getRiderRideHistory = async (req, res) => {
+  try {
+    const { riderId } = req.params;
+    const { data, error } = await supabaseAdmin
+      .from('rides')
+      .select('*')
+      .eq('rider_id', riderId)
+      .not('status', 'in', '("REQUESTED","SEARCHING_DRIVER","DRIVER_ASSIGNED","DRIVER_ARRIVING","RIDE_STARTED")')
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) throw error;
+    res.status(200).json(data || []);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};

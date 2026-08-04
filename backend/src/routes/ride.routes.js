@@ -10,5 +10,6 @@ router.get('/:rideId', protect, rideController.getRide);
 router.post('/:rideId/complete', protect, rideController.completeRide);
 router.post('/:rideId/cancel', protect, rideController.cancelRide);
 router.get('/rider/:riderId/active', protect, rideController.getRiderActiveRide);
+router.get('/rider/:riderId/history', protect, rideController.getRiderRideHistory);
 
 module.exports = router;

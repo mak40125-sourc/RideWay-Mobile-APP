@@ -1,7 +1,6 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { useWalletStore } from '../../store/walletStore';
 import { useDriverStore } from '../../store/driverStore';
-import { colors, spacing, borderRadius, fontSize, fontWeight } from '../../constants/theme';
 
 export default function EarningsCard() {
   const { balance } = useWalletStore();
@@ -9,16 +8,16 @@ export default function EarningsCard() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.balanceSection}>
+      <View style={styles.column}>
         <Text style={styles.label}>Wallet Balance</Text>
-        <Text style={styles.balance}>₹{balance.toFixed(2)}</Text>
+        <Text style={styles.amount}>₹{balance.toFixed(2)}</Text>
       </View>
-      
+
       <View style={styles.divider} />
-      
-      <View style={styles.earningsSection}>
+
+      <View style={styles.column}>
         <Text style={styles.label}>Today's Earnings</Text>
-        <Text style={styles.earnings}>₹{earnings_today.toFixed(2)}</Text>
+        <Text style={styles.amount}>₹{earnings_today.toFixed(2)}</Text>
       </View>
     </View>
   );
@@ -27,37 +26,32 @@ export default function EarningsCard() {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.xl,
-    padding: spacing.md,
-    marginHorizontal: spacing.md,
-    marginTop: spacing.md,
+    backgroundColor: '#111111',
+    borderRadius: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    minHeight: 88,
+    alignItems: 'center',
   },
-  balanceSection: {
+  column: {
     flex: 1,
-  },
-  earningsSection: {
-    flex: 1,
-    alignItems: 'flex-end',
+    alignItems: 'center',
   },
   divider: {
     width: 1,
     backgroundColor: 'rgba(255,255,255,0.2)',
-    marginHorizontal: spacing.md,
+    marginHorizontal: 24,
+    alignSelf: 'stretch',
   },
   label: {
-    fontSize: fontSize.sm,
+    fontFamily: 'GeneralSans-Medium',
+    fontSize: 14,
     color: 'rgba(255,255,255,0.7)',
-    marginBottom: spacing.xs,
+    marginBottom: 8,
   },
-  balance: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold,
-    color: colors.background,
-  },
-  earnings: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold,
-    color: colors.background,
+  amount: {
+    fontFamily: 'GeneralSans-Bold',
+    fontSize: 30,
+    color: '#FFFFFF',
   },
 });

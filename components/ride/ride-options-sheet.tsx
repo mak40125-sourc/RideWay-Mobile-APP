@@ -1,9 +1,10 @@
 import * as Haptics from "expo-haptics";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 
 import type { RideOption } from "../home/types";
 import { calculateRideFare } from "./ride-helpers";
 import { rideStyles as styles } from "./ride-styles";
+import { PressableScale } from "../flow/PressableScale";
 
 type Props = {
   distance: number | null;
@@ -54,13 +55,9 @@ export function RideOptionsSheet({
               const isSelected = selectedOptionLabel === option.label;
 
               return (
-                <Pressable
+                <PressableScale
                   key={option.label}
-                  style={({ pressed }) => [
-                    styles.optionCard,
-                    isSelected ? styles.optionCardSelected : null,
-                    { opacity: pressed ? 0.75 : 1 },
-                  ]}
+                  style={[styles.optionCard, isSelected ? styles.optionCardSelected : null]}
                   onPress={() => {
                     Haptics.selectionAsync();
                     onSelectOption?.(option, fare);
@@ -77,7 +74,7 @@ export function RideOptionsSheet({
                     </View>
                   </View>
                   <Text style={styles.optionFare}>Rs {fare}</Text>
-                </Pressable>
+                </PressableScale>
               );
             })}
           </View>
@@ -86,15 +83,15 @@ export function RideOptionsSheet({
 
       <View style={styles.sheetFooter}>
           {onContinue ? (
-            <Pressable style={styles.primaryButton} onPress={onContinue}>
+            <PressableScale style={styles.primaryButton} onPress={onContinue}>
               <Text style={styles.primaryButtonText}>Confirm ride</Text>
-            </Pressable>
+            </PressableScale>
           ) : null}
 
           {onBack ? (
-            <Pressable onPress={onBack}>
+            <PressableScale onPress={onBack}>
               <Text style={styles.back}>Back</Text>
-            </Pressable>
+            </PressableScale>
           ) : null}
       </View>
     </View>

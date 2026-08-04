@@ -11,6 +11,7 @@ import { RideOptionsSheet } from "./ride-options-sheet";
 import { rideOptions } from "./ride-config";
 import { rideStyles as styles } from "./ride-styles";
 import { RideTopBar } from "./ride-top-bar";
+import { FlowView } from "../flow/FlowView";
 
 type Props = {
   pickup: {
@@ -48,20 +49,22 @@ export function RideSelectionScreen({ pickup, dropoff, estimate }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <RideMap pickup={pickup} dropoff={dropoff} region={region} routePath={estimate.path} />
-      <RideTopBar title="Choose your ride" subtitle="Select a ride type that suits your trip." />
-      <RideOptionsSheet
-        distance={estimate.distance}
-        duration={estimate.duration}
-        options={rideOptions}
-        selectedOptionLabel={selectedOptionLabel}
-        onSelectOption={(option: RideOption, fare) => {
-          setSelectedOption(option, fare);
-        }}
-        onBack={() => router.back()}
-        onContinue={continueToConfirm}
-      />
-    </SafeAreaView>
+    <FlowView>
+      <SafeAreaView style={styles.screen}>
+        <RideMap pickup={pickup} dropoff={dropoff} region={region} routePath={estimate.path} />
+        <RideTopBar title="Choose your ride" subtitle="Select a ride type that suits your trip." />
+        <RideOptionsSheet
+          distance={estimate.distance}
+          duration={estimate.duration}
+          options={rideOptions}
+          selectedOptionLabel={selectedOptionLabel}
+          onSelectOption={(option: RideOption, fare) => {
+            setSelectedOption(option, fare);
+          }}
+          onBack={() => router.back()}
+          onContinue={continueToConfirm}
+        />
+      </SafeAreaView>
+    </FlowView>
   );
 }

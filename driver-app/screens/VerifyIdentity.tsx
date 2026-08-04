@@ -25,7 +25,6 @@ interface VerifyIdentityProps {
   allUploaded: boolean;
   onUpload: (key: string) => void;
   onContinue: () => void;
-  onSettings?: () => void;
 }
 
 export function VerifyIdentity({
@@ -34,7 +33,6 @@ export function VerifyIdentity({
   allUploaded,
   onUpload,
   onContinue,
-  onSettings,
 }: VerifyIdentityProps) {
   const renderCard = useCallback(
     (doc: DocumentItem, index: number) => (
@@ -54,15 +52,10 @@ export function VerifyIdentity({
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView bounces={false} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <View style={styles.headerText}>
-            <Text style={styles.title}>Verify Identity</Text>
-            <Text style={styles.subtitle}>Upload your documents to get verified</Text>
-          </View>
-          <TouchableOpacity style={styles.settingsBtn} onPress={onSettings}>
-            <Ionicons name="person-outline" size={22} color="#111111" />
-          </TouchableOpacity>
-        </View>
+        <Text style={styles.title}>Verify Identity</Text>
+        <Text style={styles.subtitle}>Upload your documents to get verified</Text>
+
+        <View style={styles.divider} />
 
         {documents.map((doc, index) => renderCard(doc, index))}
 
@@ -89,39 +82,25 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 24,
-    paddingTop: 20,
+    paddingTop: 24,
     paddingBottom: 40,
   },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 28,
-  },
-  headerText: {
-    flex: 1,
-    marginRight: 16,
-  },
   title: {
+    fontFamily: "GeneralSans-Semibold",
     fontSize: 28,
     color: "#111111",
-    fontFamily: "NeueMontreal-Bold",
     marginBottom: 6,
   },
   subtitle: {
+    fontFamily: "GeneralSans-Regular",
     fontSize: 16,
     color: "#7A7A7A",
-    fontFamily: "NeueMontreal-Regular",
     lineHeight: 22,
   },
-  settingsBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#FAFAFA",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 2,
+  divider: {
+    height: 1,
+    backgroundColor: "#F0F0F0",
+    marginVertical: 24,
   },
   continueBtn: {
     height: 56,
@@ -134,8 +113,8 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   continueBtnText: {
+    fontFamily: "GeneralSans-Semibold",
     fontSize: 16,
     color: "#FFFFFF",
-    fontFamily: "NeueMontreal-Bold",
   },
 });

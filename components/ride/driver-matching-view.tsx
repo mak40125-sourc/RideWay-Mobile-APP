@@ -168,7 +168,7 @@ export function DriverMatchingView({ vehicleLabel, fare, onCancel }: Props) {
             style={{
               color: "#111111",
               fontSize: 22,
-              fontFamily: "NeueMontreal-Bold",
+              fontFamily: "GeneralSans-Bold",
               textAlign: "center",
             }}
           >
@@ -181,7 +181,7 @@ export function DriverMatchingView({ vehicleLabel, fare, onCancel }: Props) {
           style={{
             color: "#6B7280",
             fontSize: 14,
-            fontFamily: "NeueMontreal-Regular",
+            fontFamily: "GeneralSans-Regular",
             textAlign: "center",
             marginBottom: 20,
           }}
@@ -202,7 +202,7 @@ export function DriverMatchingView({ vehicleLabel, fare, onCancel }: Props) {
             style={{
               color: "#111111",
               fontSize: 15,
-              fontFamily: "NeueMontreal-Bold",
+              fontFamily: "GeneralSans-Bold",
             }}
           >
             Rs {fare}
@@ -214,7 +214,7 @@ export function DriverMatchingView({ vehicleLabel, fare, onCancel }: Props) {
             style={{
               color: "#DC2626",
               fontSize: 14,
-              fontFamily: "NeueMontreal-Bold",
+              fontFamily: "GeneralSans-Bold",
               textAlign: "center",
             }}
           >

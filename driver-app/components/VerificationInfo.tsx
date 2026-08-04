@@ -29,7 +29,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     color: "#7A7A7A",
-    fontFamily: "NeueMontreal-Regular",
+    fontFamily: "GeneralSans-Regular",
     lineHeight: 20,
   },
 });

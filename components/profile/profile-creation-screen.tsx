@@ -98,14 +98,14 @@ const styles = StyleSheet.create({
   logo: {
     color: "#0d141c",
     fontSize: 34,
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Bold",
     marginBottom: 32,
   },
   title: {
     color: "#0d141c",
     fontSize: 28,
     lineHeight: 34,
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Bold",
   },
   subtitle: {
     color: "#6b7280",
@@ -113,12 +113,12 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginTop: 8,
     marginBottom: 32,
-    fontFamily: "NeueMontreal-Regular",
+    fontFamily: "GeneralSans-Regular",
   },
   label: {
     color: "#0d141c",
     fontSize: 14,
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Bold",
     marginBottom: 8,
   },
   input: {
@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     color: "#0d141c",
     fontSize: 16,
-    fontFamily: "NeueMontreal-Regular",
+    fontFamily: "GeneralSans-Regular",
   },
   button: {
     backgroundColor: "#0d141c",
@@ -147,6 +147,6 @@ const styles = StyleSheet.create({
   buttonText: {
     color: "#f8f4ee",
     fontSize: 16,
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Bold",
   },
 });

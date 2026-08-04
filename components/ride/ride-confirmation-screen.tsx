@@ -1,4 +1,4 @@
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, ScrollView, Text, View } from "react-native";
 
 import { useAuth } from "../../context/auth-context";
 import { useRideStore } from "../../context/ride-store";
@@ -6,6 +6,8 @@ import { buildMapRegion } from "../../utils/map-region";
 import { RideMap } from "./ride-map";
 import { rideStyles as styles } from "./ride-styles";
 import { RideTopBar } from "./ride-top-bar";
+import { FlowView } from "../flow/FlowView";
+import { PressableScale } from "../flow/PressableScale";
 
 export function RideConfirmationScreen() {
   const { user } = useAuth();
@@ -27,47 +29,49 @@ export function RideConfirmationScreen() {
   };
 
   return (
-    <View style={styles.screen}>
-      <RideMap pickup={trip.pickup} dropoff={trip.dropoff} region={region} routePath={trip.path} />
-      <RideTopBar title="Confirm your trip" subtitle="Review your ride details before we find a driver." />
+    <FlowView>
+      <View style={styles.screen}>
+        <RideMap pickup={trip.pickup} dropoff={trip.dropoff} region={region} routePath={trip.path} />
+        <RideTopBar title="Confirm your trip" subtitle="Review your ride details before we find a driver." />
 
-      <ScrollView
-        bounces={false}
-        style={styles.contentCard}
-        contentContainerStyle={styles.contentCardScroll}
-        showsVerticalScrollIndicator={false}>
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionLabel}>Selected ride</Text>
-          <Text style={styles.sectionTitle}>{trip.option.label}</Text>
-          <Text style={styles.sectionText}>{trip.option.description}</Text>
-        </View>
+        <ScrollView
+          bounces={false}
+          style={styles.contentCard}
+          contentContainerStyle={styles.contentCardScroll}
+          showsVerticalScrollIndicator={false}>
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionLabel}>Selected ride</Text>
+            <Text style={styles.sectionTitle}>{trip.option.label}</Text>
+            <Text style={styles.sectionText}>{trip.option.description}</Text>
+          </View>
 
-        <View style={styles.sectionCard}>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Fare estimate</Text>
-            <Text style={styles.detailValue}>Rs {trip.fare}</Text>
+          <View style={styles.sectionCard}>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Fare estimate</Text>
+              <Text style={styles.detailValue}>Rs {trip.fare}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Pickup</Text>
+              <Text style={styles.detailValue}>{trip.pickup.latitude.toFixed(4)}, {trip.pickup.longitude.toFixed(4)}</Text>
+            </View>
+            <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
+              <Text style={styles.detailLabel}>Drop-off</Text>
+              <Text style={styles.detailValue}>{trip.dropoff.latitude.toFixed(4)}, {trip.dropoff.longitude.toFixed(4)}</Text>
+            </View>
           </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Pickup</Text>
-            <Text style={styles.detailValue}>{trip.pickup.latitude.toFixed(4)}, {trip.pickup.longitude.toFixed(4)}</Text>
-          </View>
-          <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
-            <Text style={styles.detailLabel}>Drop-off</Text>
-            <Text style={styles.detailValue}>{trip.dropoff.latitude.toFixed(4)}, {trip.dropoff.longitude.toFixed(4)}</Text>
-          </View>
-        </View>
 
-        <Pressable
-          style={[styles.primaryButton, requesting && styles.primaryButtonDisabled]}
-          onPress={handleConfirm}
-          disabled={requesting}>
-          {requesting ? (
-            <Text style={styles.primaryButtonText}>Requesting...</Text>
-          ) : (
-            <Text style={styles.primaryButtonText}>Confirm and find driver</Text>
-          )}
-        </Pressable>
-      </ScrollView>
-    </View>
+          <PressableScale
+            style={[styles.primaryButton, requesting && styles.primaryButtonDisabled]}
+            onPress={handleConfirm}
+            disabled={requesting}>
+            {requesting ? (
+              <Text style={styles.primaryButtonText}>Requesting...</Text>
+            ) : (
+              <Text style={styles.primaryButtonText}>Confirm and find driver</Text>
+            )}
+          </PressableScale>
+        </ScrollView>
+      </View>
+    </FlowView>
   );
 }

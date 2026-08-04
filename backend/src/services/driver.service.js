@@ -11,6 +11,23 @@ exports.getDriverByUserId = async (userId) => {
   return data;
 };
 
+exports.ensureProfile = async (userId, email) => {
+  const { data: existing } = await supabaseAdmin
+    .from('profiles')
+    .select('id')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (!existing) {
+    const { error } = await supabaseAdmin.from('profiles').insert({
+      id: userId,
+      name: email || 'Driver',
+      role: 'driver',
+    });
+    if (error) throw error;
+  }
+};
+
 exports.createDriver = async (userId, data) => {
   const { vehicle_type, vehicle_number, vehicle_model, vehicle_color } = data;
 

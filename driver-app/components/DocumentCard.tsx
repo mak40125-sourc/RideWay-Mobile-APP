@@ -61,13 +61,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     color: "#111111",
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Semibold",
     marginBottom: 2,
   },
   subtitle: {
     fontSize: 14,
     color: "#7A7A7A",
-    fontFamily: "NeueMontreal-Regular",
+    fontFamily: "GeneralSans-Regular",
   },
   badge: {
     backgroundColor: "#16C784",
@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 13,
     color: "#FFFFFF",
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Semibold",
   },
   uploadBtn: {
     borderRadius: 20,
@@ -90,6 +90,6 @@ const styles = StyleSheet.create({
   uploadBtnText: {
     fontSize: 13,
     color: "#111111",
-    fontFamily: "NeueMontreal-Bold",
+    fontFamily: "GeneralSans-Semibold",
   },
 });

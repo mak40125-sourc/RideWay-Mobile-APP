@@ -10,8 +10,8 @@ export function BottomSheetHandle(_props: BottomSheetHandleProps) {
         height: 4,
         borderRadius: 2,
         backgroundColor: "#D1D5DB",
-        marginTop: 8,
-        marginBottom: 4,
+        marginTop: 10,
+        marginBottom: 6,
       }}
     />
   );

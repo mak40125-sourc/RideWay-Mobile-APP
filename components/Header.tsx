@@ -22,7 +22,7 @@ export function Header() {
           style={{
             color: "#111111",
             fontSize: 30,
-            fontFamily: "NeueMontreal-Bold",
+            fontFamily: "GeneralSans-Bold",
           }}
         >
           RideWay
@@ -32,7 +32,7 @@ export function Header() {
             color: "#6B7280",
             fontSize: 14,
             marginTop: 2,
-            fontFamily: "NeueMontreal-Regular",
+            fontFamily: "GeneralSans-Regular",
           }}
         >
           Pickup, match, ride

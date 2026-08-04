@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
-import { File, UploadType } from 'expo-file-system';
 import { Platform } from 'react-native';
 import { api } from './api';
 import type { Driver, DriverLocation } from '../types/driver';
@@ -43,8 +42,8 @@ export const driverAPI = {
     return api.put('/drivers/location', { location });
   },
 
-  setOnline: async () => {
-    return api.put('/drivers/online', { isOnline: true });
+  setOnline: async (rideType?: string, vehicleNumber?: string) => {
+    return api.put('/drivers/online', { isOnline: true, rideType, vehicleNumber });
   },
 
   setOffline: async () => {
@@ -57,26 +56,30 @@ export const driverAPI = {
   ): Promise<string> => {
     const token = await AsyncStorage.getItem(TOKEN_KEY);
 
-    const file = new File(fileUri);
-    const result = await file.upload(`${API_BASE_URL}/drivers/upload-document`, {
-      uploadType: UploadType.MULTIPART,
-      fieldName: 'document',
-      httpMethod: 'POST',
-      mimeType: 'image/jpeg',
+    const formData = new FormData();
+    formData.append('document', {
+      uri: fileUri,
+      type: 'image/jpeg',
+      name: 'document.jpg',
+    } as any);
+    formData.append('document_type', documentType);
+
+    const response = await fetch(`${API_BASE_URL}/drivers/upload-document`, {
+      method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
-      parameters: { document_type: documentType },
+      body: formData,
     });
 
-    if (result.status < 200 || result.status >= 300) {
-      let message = `Upload failed (${result.status})`;
+    if (!response.ok) {
+      let message = `Upload failed (${response.status})`;
       try {
-        const err = JSON.parse(result.body);
+        const err = await response.json();
         message = err?.error || message;
       } catch {}
       throw new Error(message);
     }
 
-    const data = JSON.parse(result.body);
+    const data = await response.json();
     return data.document_url;
   },
 };

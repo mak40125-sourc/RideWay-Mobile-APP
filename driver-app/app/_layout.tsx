@@ -28,7 +28,14 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <Stack screenOptions={{ headerShown: false }} />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(driver)" />
+        <Stack.Screen name="(tabs)" options={{ animation: 'slide_from_left' }} />
+        <Stack.Screen name="(wallet)" />
+        <Stack.Screen name="(modals)" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="index" />
+      </Stack>
     </AuthProvider>
   );
 }

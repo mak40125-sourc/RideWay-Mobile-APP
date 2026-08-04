@@ -27,4 +27,5 @@ export type RideOption = {
   baseFare: number;
   perKm: number;
   perMin: number;
+  vehicleType: string;
 };
