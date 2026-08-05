@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const rideController = require('../controllers/ride.controller');
-const { protect } = require('../middleware/auth.middleware');
+const rideController = require('./ride.controller');
+const { protect } = require('../../core/middleware/auth.middleware');
 
 router.post('/request', protect, rideController.requestRide);
 router.post('/:rideId/accept', protect, rideController.acceptRide);

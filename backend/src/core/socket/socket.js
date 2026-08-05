@@ -1,5 +1,5 @@
 const { Server } = require('socket.io');
-const { supabaseAdmin } = require('./supabase');
+const { supabaseAdmin } = require('../database/supabase');
 
 let io = null;
 

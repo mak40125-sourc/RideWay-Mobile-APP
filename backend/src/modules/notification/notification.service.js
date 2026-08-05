@@ -1,5 +1,5 @@
-const { getIO } = require('../config/socket');
-const redisService = require('./redis.service');
+const { getIO } = require('../../core/socket/socket');
+const redisService = require('../../core/redis/redis.service');
 
 function initNotificationService() {
   redisService.subscribeToNotifications('ride:notifications', (notification) => {

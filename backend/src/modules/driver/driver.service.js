@@ -1,4 +1,4 @@
-const { supabaseAdmin } = require('../config/supabase');
+const { supabaseAdmin } = require('../../core/database/supabase');
 
 exports.getDriverByUserId = async (userId) => {
   const { data, error } = await supabaseAdmin

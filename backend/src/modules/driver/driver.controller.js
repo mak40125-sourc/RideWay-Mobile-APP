@@ -1,6 +1,6 @@
-const { supabaseAdmin } = require('../config/supabase');
-const redisService = require('../services/redis.service');
-const driverService = require('../services/driver.service');
+const { supabaseAdmin } = require('../../core/database/supabase');
+const redisService = require('../../core/redis/redis.service');
+const driverService = require('./driver.service');
 
 exports.updateLocation = async (req, res) => {
   try {

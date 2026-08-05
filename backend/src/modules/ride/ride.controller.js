@@ -1,5 +1,4 @@
-const { supabaseAdmin } = require('../config/supabase');
-const rideService = require('../services/ride.service');
+const rideService = require('./ride.service');
 
 exports.requestRide = async (req, res) => {
   try {
@@ -37,15 +36,7 @@ exports.updateRideStatus = async (req, res) => {
       });
     }
 
-    const { data: ride, error } = await supabaseAdmin
-      .from('rides')
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq('id', rideId)
-      .eq('driver_id', driverId)
-      .select()
-      .maybeSingle();
-
-    if (error) throw error;
+    const ride = await rideService.updateRideStatus(rideId, driverId, status);
     if (!ride) return res.status(404).json({ error: 'Ride not found or not assigned to you' });
 
     res.status(200).json(ride);
@@ -57,16 +48,11 @@ exports.updateRideStatus = async (req, res) => {
 exports.getRide = async (req, res) => {
   try {
     const { rideId } = req.params;
-    const { data, error } = await supabaseAdmin
-      .from('rides')
-      .select('*')
-      .eq('id', rideId)
-      .maybeSingle();
+    const ride = await rideService.getRide(rideId);
 
-    if (error) throw error;
-    if (!data) return res.status(404).json({ error: 'Ride not found' });
+    if (!ride) return res.status(404).json({ error: 'Ride not found' });
 
-    res.status(200).json(data);
+    res.status(200).json(ride);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -77,16 +63,8 @@ exports.completeRide = async (req, res) => {
     const { rideId } = req.params;
     const driverId = req.user.id;
 
-    const { data: ride, error } = await supabaseAdmin
-      .from('rides')
-      .update({ status: 'RIDE_COMPLETED', updated_at: new Date().toISOString() })
-      .eq('id', rideId)
-      .eq('driver_id', driverId)
-      .select()
-      .maybeSingle();
-
-    if (error) throw error;
-    if (!data) return res.status(404).json({ error: 'Ride not found or not assigned to you' });
+    const ride = await rideService.completeRide(rideId, driverId);
+    if (!ride) return res.status(404).json({ error: 'Ride not found or not assigned to you' });
 
     res.status(200).json(ride);
   } catch (error) {
@@ -99,18 +77,10 @@ exports.cancelRide = async (req, res) => {
     const { rideId } = req.params;
     const driverId = req.user.id;
 
-    const { data, error } = await supabaseAdmin
-      .from('rides')
-      .update({ status: 'CANCELLED', updated_at: new Date().toISOString() })
-      .eq('id', rideId)
-      .eq('driver_id', driverId)
-      .select()
-      .maybeSingle();
+    const ride = await rideService.cancelRide(rideId, driverId);
+    if (!ride) return res.status(404).json({ error: 'Ride not found or not assigned to you' });
 
-    if (error) throw error;
-    if (!data) return res.status(404).json({ error: 'Ride not found or not assigned to you' });
-
-    res.status(200).json(data);
+    res.status(200).json(ride);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -119,17 +89,9 @@ exports.cancelRide = async (req, res) => {
 exports.getRiderActiveRide = async (req, res) => {
   try {
     const { riderId } = req.params;
-    const { data, error } = await supabaseAdmin
-      .from('rides')
-      .select('*')
-      .eq('rider_id', riderId)
-      .in('status', ['REQUESTED', 'SEARCHING_DRIVER', 'DRIVER_ASSIGNED', 'DRIVER_ARRIVING', 'RIDE_STARTED'])
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const ride = await rideService.getRiderActiveRide(riderId);
 
-    if (error) throw error;
-    res.status(200).json(data || null);
+    res.status(200).json(ride || null);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -138,16 +100,9 @@ exports.getRiderActiveRide = async (req, res) => {
 exports.getRiderRideHistory = async (req, res) => {
   try {
     const { riderId } = req.params;
-    const { data, error } = await supabaseAdmin
-      .from('rides')
-      .select('*')
-      .eq('rider_id', riderId)
-      .not('status', 'in', '("REQUESTED","SEARCHING_DRIVER","DRIVER_ASSIGNED","DRIVER_ARRIVING","RIDE_STARTED")')
-      .order('created_at', { ascending: false })
-      .limit(50);
+    const rides = await rideService.getRiderRideHistory(riderId);
 
-    if (error) throw error;
-    res.status(200).json(data || []);
+    res.status(200).json(rides || []);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

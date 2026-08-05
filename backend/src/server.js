@@ -2,8 +2,8 @@ const http = require('http');
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const app = require('./app');
-const { initSocket } = require('./config/socket');
-const { initNotificationService, shutdownNotificationService } = require('./services/notification.service');
+const { initSocket } = require('./core/socket/socket');
+const { initNotificationService, shutdownNotificationService } = require('./modules/notification');
 
 const PORT = process.env.PORT || 3000;
 

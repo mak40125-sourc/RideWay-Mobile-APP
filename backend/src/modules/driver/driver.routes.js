@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const driverController = require('../controllers/driver.controller');
-const { protect } = require('../middleware/auth.middleware');
-const upload = require('../middleware/upload.middleware');
+const driverController = require('./driver.controller');
+const { protect } = require('../../core/middleware/auth.middleware');
+const upload = require('../../core/middleware/upload.middleware');
 
 // All driver routes should be protected
 router.get('/me', protect, driverController.getMyProfile);

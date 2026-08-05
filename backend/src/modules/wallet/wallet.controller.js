@@ -1,4 +1,4 @@
-const { supabaseAdmin } = require('../config/supabase');
+const { supabaseAdmin } = require('../../core/database/supabase');
 
 exports.getWalletBalance = async (req, res) => {
   try {
