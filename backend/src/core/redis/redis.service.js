@@ -1,4 +1,5 @@
 const Redis = require('ioredis');
+const { logger, currentCorrelationId } = require('../logger/logger');
 
 const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 const REDIS_PORT = parseInt(process.env.REDIS_PORT || '6379', 10);
@@ -10,18 +11,18 @@ function createClient(label) {
     lazyConnect: true,
     retryStrategy: (times) => {
       if (times > 3) {
-        console.log(`Redis (${label}): unavailable`);
+        logger.warn({ type: 'redis', event: 'unavailable', label });
         return null;
       }
       return Math.min(times * 200, 2000);
     },
   });
 
-  c.on('connect', () => console.log(`Redis (${label}): connected`));
+  c.on('connect', () => logger.info({ type: 'redis', event: 'connected', label }));
+  c.on('ready', () => logger.info({ type: 'redis', event: 'ready', label }));
+  c.on('close', () => logger.warn({ type: 'redis', event: 'disconnected', label }));
   c.on('error', (err) => {
-    if (process.env.NODE_ENV !== 'production') {
-      console.error(`Redis (${label}): ${err.message}`);
-    }
+    logger.error({ type: 'redis', event: 'error', label, error: err.message });
   });
 
   c.connect().catch(() => {});
@@ -118,16 +119,43 @@ const redisService = {
     };
     await client.hset(key, fields);
     await client.expire(key, RIDE_REQUEST_TTL);
+    logger.info({
+      type: 'redis',
+      event: 'ride_request_buffer_set',
+      correlationId: currentCorrelationId(),
+      rideId,
+      key,
+      ttl: RIDE_REQUEST_TTL,
+    });
   },
 
   getRideRequest: async (rideId) => {
-    const data = await client.hgetall(`ride:request:${rideId}`);
-    if (!data || Object.keys(data).length === 0) return null;
+    const key = `ride:request:${rideId}`;
+    const data = await client.hgetall(key);
+    if (!data || Object.keys(data).length === 0) {
+      logger.warn({
+        type: 'redis',
+        event: 'ride_request_buffer_missing',
+        correlationId: currentCorrelationId(),
+        rideId,
+        key,
+        ttl: await client.ttl(key).catch(() => -2),
+      });
+      return null;
+    }
     return data;
   },
 
   deleteRideRequest: async (rideId) => {
-    await client.del(`ride:request:${rideId}`);
+    const key = `ride:request:${rideId}`;
+    await client.del(key);
+    logger.info({
+      type: 'redis',
+      event: 'ride_request_buffer_deleted',
+      correlationId: currentCorrelationId(),
+      rideId,
+      key,
+    });
   },
 
   // ── Driver Queue ─────────────────────────────────────────────────
@@ -161,30 +189,71 @@ const redisService = {
       'EX',
       ttl
     );
+    logger.info({
+      type: 'redis',
+      event: acquired !== null ? 'lock_acquired' : 'lock_contended',
+      correlationId: currentCorrelationId(),
+      rideId,
+      driverId,
+      ttl,
+    });
     return acquired !== null;
   },
 
   releaseRideLock: async (rideId) => {
-    await client.del(`ride:lock:${rideId}`);
+    const key = `ride:lock:${rideId}`;
+    await client.del(key);
+    logger.info({
+      type: 'redis',
+      event: 'lock_released',
+      correlationId: currentCorrelationId(),
+      rideId,
+      key,
+    });
   },
 
   // ── Pub/Sub ──────────────────────────────────────────────────────
   publishNotification: async (channel, message) => {
     const payload = typeof message === 'string' ? message : JSON.stringify(message);
-    await client.publish(channel, payload);
+    let correlationId;
+    if (typeof message === 'object' && message !== null) {
+      correlationId = message.correlationId;
+    }
+    try {
+      const result = await client.publish(channel, payload);
+      logger.info({
+        type: 'redis',
+        event: 'publish_success',
+        correlationId: correlationId || currentCorrelationId(),
+        channel,
+        subscriberCount: result,
+      });
+    } catch (err) {
+      logger.error({
+        type: 'redis',
+        event: 'publish_failure',
+        correlationId: correlationId || currentCorrelationId(),
+        channel,
+        error: err.message,
+      });
+      throw err;
+    }
   },
 
   subscribeToNotifications: (channel, callback) => {
     subscriber.subscribe(channel, (err) => {
       if (err) {
-        console.error(`Redis subscribe (${channel}): ${err.message}`);
+        logger.error({ type: 'redis', event: 'subscribe_failure', channel, error: err.message });
+      } else {
+        logger.info({ type: 'redis', event: 'subscribe_success', channel });
       }
     });
 
     subscriber.on('message', (ch, message) => {
       if (ch === channel) {
         try {
-          callback(JSON.parse(message));
+          const parsed = JSON.parse(message);
+          callback(parsed);
         } catch {
           callback(message);
         }

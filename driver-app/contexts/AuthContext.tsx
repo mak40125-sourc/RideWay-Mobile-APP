@@ -2,6 +2,7 @@ import type { Session, User } from "@supabase/supabase-js";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { getProfile, signOut as supabaseSignOut, supabase, type UserProfile } from "../lib/supabase";
 import { clearAuthToken, setAuthToken } from "../services/api";
+import { diagLogger } from "../utils/diagLog";
 
 type AuthContextType = {
   authUser: User | null;
@@ -46,9 +47,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthUser(sessionUser);
 
     if (!sessionUser) {
+      diagLogger.setDriverId(null);
+      diagLogger.log('AUTH_SIGNED_OUT', `version=${version}`);
       setUser(null);
       return;
     }
+
+    diagLogger.setDriverId(sessionUser.id);
+    diagLogger.log('AUTH_SESSION', `version=${version} user=${sessionUser.id}`);
 
     getProfile(sessionUser.id)
       .then((profile) => {
@@ -73,6 +79,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession()
       .then(({ data, error }) => {
         if (!error && isMounted) {
+          diagLogger.setNetwork('UNKNOWN');
+          diagLogger.log('AUTH_RESTORE_ATTEMPT', data.session ? 'found-session' : 'no-session');
           applySession(data.session);
         }
       })
@@ -81,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      diagLogger.log('AUTH_STATE_CHANGE', _event);
       if (isMounted) applySession(session);
     });
 

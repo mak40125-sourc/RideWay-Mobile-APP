@@ -41,8 +41,8 @@ Base URL: `http://localhost:3000/api/v1`
    layer-based layout (`routes/`, `controllers/`, `services/`, `config/`) into
    feature-based modules. The runtime stays a single deployable process.
 2. **Modules own their vertical slice.** Each module (`driver`, `ride`,
-   `wallet`, `notification`) contains its own routes, controller, and service,
-   and exposes only its public API through a module `index.js`.
+   `matching`, `wallet`, `notification`) contains its own routes, controller,
+   and service, and exposes only its public API through a module `index.js`.
 3. **`core/` holds cross-cutting infrastructure only.** Config, middleware,
    database, redis, and socket setup live in `core/`. `core/` must not contain
    ride or driver business logic.
@@ -83,7 +83,9 @@ backend/
     ├── server.js             # HTTP bootstrap, socket init, graceful shutdown
     ├── core/                 # cross-cutting infrastructure (no business logic)
     │   ├── database/supabase.js          # supabase + supabaseAdmin clients
+    │   ├── logger/logger.js              # winston structured logger + correlation/ALS
     │   ├── middleware/auth.middleware.js # protect() JWT verification
+    │   ├── middleware/correlation.middleware.js # x-correlation-id / trace id per request
     │   ├── middleware/upload.middleware.js # multer memory storage config
     │   ├── redis/redis.js                # legacy ioredis client
     │   ├── redis/redis.service.js        # centralized Redis (geo, state, queue, locks, pub/sub)
@@ -91,12 +93,13 @@ backend/
     └── modules/             # feature-based modules
         ├── driver/          # index.js, driver.routes/controller/service/repository.js
         ├── ride/            # index.js, ride.routes/controller/service/repository.js
+        ├── matching/        # index.js, matching.service/repository.js + pipeline helpers
         ├── wallet/          # index.js, wallet.routes/controller/repository.js
         └── notification/    # index.js, notification.service.js
 ```
 
 Future (later phases): `shared/`, `workers/`, and modules for `auth`, `rider`,
-`maps`, `profile`, `admin`, `matching`.
+`maps`, `profile`, `admin`.
 
 ---
 
@@ -132,6 +135,43 @@ Future (later phases): `shared/`, `workers/`, and modules for `auth`, `rider`,
 - Behaviors preserved exactly (same queries, error messages, lock handling,
   Redis keys, responses). Driver/Wallet modules untouched.
 
+**Phase 2C: Driver repository migration — COMPLETE**
+
+- Migrated **all** Driver persistence into `src/modules/driver/driver.repository.js`:
+  Supabase (`drivers`, `profiles`, `driver_documents`, Storage `kyc-documents`)
+  and Redis (availability/location/status: `setDriverLocation`,
+  `setDriverOnline`, `setDriverOffline`, `getNearbyDrivers`).
+- `driver.service.js` now contains business logic only and invokes the
+  repository; `driver.controller.js` invokes the service (its direct
+  `redisService` calls were moved behind the service). Flow:
+  `Controller → Service → Repository → Supabase/Redis`.
+- Behaviors preserved exactly (same queries, responses, validation, online/
+  offline and location semantics). Ride/Wallet modules untouched.
+
+**Phase 3: Matching module extraction — COMPLETE**
+
+- Created `src/modules/matching/` as a feature module owning the ride-matching
+  pipeline: `matching.constants.js`, `matching.repository.js`,
+  `candidate-finder.js`, `candidate-ranker.js`, `offer-dispatcher.js`,
+  `acceptance-manager.js`, `matching.service.js`, `index.js`.
+- Moved all matching persistence out of `ride.repository.js` into
+  `matching.repository.js`: Redis (ride request buffer, driver availability,
+  offer queue, lock, pub/sub) and Supabase (RPC `accept_ride`, rider name
+  lookup). `ride.repository.js` keeps ride lifecycle only (get/status/complete/
+  cancel/history).
+- `matching.service.js` orchestrates the pipeline (business logic only):
+  `createRideRequest` (buffer write → candidate discovery → rank → dispatch
+  offers) and `acceptRide` (lock → RPC → cleanup). Helper modules split the
+  pipeline: `candidate-finder` (geo + vehicle_type filter),
+  `candidate-ranker` (identity today, ranking slot reserved),
+  `offer-dispatcher` (queue + pub/sub), `acceptance-manager` (lock + RPC).
+- `ride.service.js` keeps ride lifecycle and delegates `createRideRequest` /
+  `acceptRide` to `matchingService` through the module `index.js` (no deep
+  imports). Controller, routes, API shapes, Redis keys, Socket.IO events, and
+  error messages unchanged.
+- Flow: `Ride Controller → Ride Service → Matching Service → Repositories →
+  Redis/Supabase`. Wallet module untouched.
+
 ---
 
 ## Constraints
@@ -155,11 +195,14 @@ Applies to the current and all future phases:
 ## Current TODOs
 
 - [ ] Populate remaining module targets as features mature: `auth`, `rider`,
-      `maps`, `profile`, `admin`, `matching`.
+      `maps`, `profile`, `admin`.
 - [ ] Create `shared/` for generic reusable utilities (utils, constants,
       validators, helpers) — future phase.
 - [ ] Create `workers/` for background workers — future phase.
-- [x] Repositories layer — infrastructure scaffolded (Phase 2A); Ride persistence
-      migrated (Phase 2B). Driver/Wallet persistence migration — future phase.
+- [x] Matching module extraction (Phase 3) — COMPLETE.
+- [ ] Wallet persistence migration — future phase.
 - [ ] Event bus abstraction — future phase.
 - [ ] Ride-matching redesign — future phase.
+- [x] Ride flow instrumentation — COMPLETE (correlation/trace ids, lifecycle stage
+      + failure logs, Redis/socket debug logs; see `docs/ride-flow-investigation.md`).
+      Investigation output: `logs/rideway.log`.

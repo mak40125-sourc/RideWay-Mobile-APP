@@ -5,6 +5,7 @@ import { useRideStore } from '../../store/rideStore';
 import { useDriverStore } from '../../store/driverStore';
 import { rideAPI } from '../../services/rideAPI';
 import { colors, spacing, borderRadius, fontSize, fontWeight } from '../../constants/theme';
+import { diagLogger } from '../../utils/diagLog';
 
 export default function RideRequestModal() {
   const router = useRouter();
@@ -29,22 +30,32 @@ export default function RideRequestModal() {
 
   const handleAccept = async () => {
     if (!current_request || accepting) return;
+    diagLogger.log('RIDE_ACCEPT_PRESS', `rideId=${current_request.rideId}`);
     setAccepting(true);
     try {
       const ride = await rideAPI.acceptRide(current_request.rideId);
+      diagLogger.log('RIDE_ACCEPT_OK', `rideId=${current_request.rideId} driverId=${ride.driver_id}`);
       useRideStore.getState().setCurrentRide(ride);
       setStatus('NAVIGATING_TO_PICKUP');
       router.back();
       router.push('/(driver)/pickup-navigation');
     } catch (err) {
+      diagLogger.log('RIDE_ACCEPT_ERROR', err instanceof Error ? err.message : String(err));
       setAccepting(false);
     }
   };
 
   const handleReject = () => {
+    diagLogger.log('RIDE_REJECT', `rideId=${current_request?.rideId ?? 'none'}`);
     clearRide();
     router.back();
   };
+
+  useEffect(() => {
+    if (current_request) {
+      diagLogger.log('RIDE_REQUEST_RENDERED', `rideId=${current_request.rideId} fare=${current_request.fare} dist=${current_request.distance}`);
+    }
+  }, [current_request]);
 
   if (!current_request) {
     return (

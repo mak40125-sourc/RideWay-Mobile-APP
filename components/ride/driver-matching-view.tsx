@@ -8,7 +8,7 @@ type Props = {
   onCancel: () => void;
 };
 
-function AnimatedDots() {
+export function AnimatedDots() {
   const opacity1 = useRef(new Animated.Value(0)).current;
   const opacity2 = useRef(new Animated.Value(0)).current;
   const opacity3 = useRef(new Animated.Value(0)).current;
@@ -57,7 +57,7 @@ function AnimatedDots() {
   );
 }
 
-function PulseRing({
+export function PulseRing({
   size,
   delay,
   duration,

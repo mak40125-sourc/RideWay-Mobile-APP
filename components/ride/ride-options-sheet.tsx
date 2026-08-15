@@ -1,8 +1,9 @@
 import * as Haptics from "expo-haptics";
-import { ScrollView, Text, View } from "react-native";
+import { Image, ScrollView, Text, View } from "react-native";
 
 import type { RideOption } from "../home/types";
 import { calculateRideFare } from "./ride-helpers";
+import { RIDE_ICON_ASSETS } from "./ride-config";
 import { rideStyles as styles } from "./ride-styles";
 import { PressableScale } from "../flow/PressableScale";
 
@@ -31,10 +32,6 @@ export function RideOptionsSheet({
     minute: "2-digit",
   });
 
-  const getOptionIcon = (label: string) => {
-    return label.slice(0, 2).toUpperCase();
-  };
-
   return (
     <View style={styles.card}>
       <View style={styles.handle} />
@@ -53,6 +50,7 @@ export function RideOptionsSheet({
             {options.map((option) => {
               const fare = distance !== null && duration !== null ? calculateRideFare(option, distance, duration) : 0;
               const isSelected = selectedOptionLabel === option.label;
+              const iconSource = RIDE_ICON_ASSETS[option.vehicleType];
 
               return (
                 <PressableScale
@@ -63,9 +61,11 @@ export function RideOptionsSheet({
                     onSelectOption?.(option, fare);
                   }}>
                   <View style={styles.optionLeft}>
-                    <View style={styles.optionIconWrap}>
-                      <Text style={styles.optionIcon}>{getOptionIcon(option.label)}</Text>
-                    </View>
+                    {iconSource ? (
+                      <View style={styles.optionIconWrap}>
+                        <Image source={iconSource} style={styles.optionIconImage} />
+                      </View>
+                    ) : null}
                     <View style={styles.optionCopy}>
                       <Text style={styles.optionTitle}>{option.label}</Text>
                       <Text numberOfLines={1} style={styles.optionDescription}>

@@ -1,11 +1,14 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Ride, RideRequest, RideStatus } from '../types/ride';
 
 interface RideState {
   current_ride: Ride | null;
   current_request: RideRequest | null;
   request_timeout: number | null;
-  
+  _hasHydrated: boolean;
+
   setCurrentRide: (ride: Ride | null) => void;
   setCurrentRequest: (request: RideRequest | null) => void;
   setRequestTimeout: (timeout: number | null) => void;
@@ -13,16 +16,31 @@ interface RideState {
   clearRide: () => void;
 }
 
-export const useRideStore = create<RideState>()((set) => ({
-  current_ride: null,
-  current_request: null,
-  request_timeout: null,
+export const useRideStore = create<RideState>()(
+  persist(
+    (set) => ({
+      current_ride: null,
+      current_request: null,
+      request_timeout: null,
+      _hasHydrated: false,
 
-  setCurrentRide: (ride) => set({ current_ride: ride }),
-  setCurrentRequest: (request) => set({ current_request: request }),
-  setRequestTimeout: (timeout) => set({ request_timeout: timeout }),
-  updateRideStatus: (status) => set((state) => ({
-    current_ride: state.current_ride ? { ...state.current_ride, status } : null
-  })),
-  clearRide: () => set({ current_ride: null, current_request: null, request_timeout: null }),
-}));
+      setCurrentRide: (ride) => set({ current_ride: ride }),
+      setCurrentRequest: (request) => set({ current_request: request }),
+      setRequestTimeout: (timeout) => set({ request_timeout: timeout }),
+      updateRideStatus: (status) => set((state) => ({
+        current_ride: state.current_ride ? { ...state.current_ride, status } : null
+      })),
+      clearRide: () => set({ current_ride: null, current_request: null, request_timeout: null }),
+    }),
+    {
+      name: 'ride-storage',
+      storage: createJSONStorage(() => AsyncStorage),
+      // Persist only the recovery cache. current_request is ephemeral modal
+      // state and must never survive a restart.
+      partialize: (state) => ({ current_ride: state.current_ride }),
+      onRehydrateStorage: () => () => {
+        useRideStore.setState({ _hasHydrated: true });
+      },
+    }
+  )
+);

@@ -7,6 +7,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from '
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useDriverStore } from '../../store/driverStore';
+import { useRideStore } from '../../store/rideStore';
 import { useWalletStore } from '../../store/walletStore';
 import { useDriverLocation } from '../../hooks/useDriverLocation';
 import { useRideListener } from '../../hooks/useRideListener';
@@ -21,6 +22,7 @@ import MenuButton from '../../components/driver/MenuButton';
 import SideMenu from '../../components/driver/SideMenu';
 import { colors } from '../../constants/theme';
 import { WALLET_MINIMUM } from '../../constants/wallet';
+import { diagLogger } from '../../utils/diagLog';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BOTTOM_PANEL_HEIGHT = SCREEN_HEIGHT * 0.35;
@@ -51,16 +53,20 @@ export default function DriverHomeScreen() {
     }
     setFetching(true);
     setFetchError(null);
+    diagLogger.log('PROFILE_FETCH_START');
     driverAPI.getMyProfile()
       .then((profile) => {
         setDriver(profile);
+        diagLogger.log('PROFILE_FETCH_OK');
       })
       .catch((err) => {
-        if (err instanceof Error && err.message.includes('404')) {
+        const msg = err instanceof Error ? err.message : String(err);
+        diagLogger.log('PROFILE_FETCH_ERROR', msg);
+        if (msg.includes('404')) {
           router.replace('/(auth)/kyc');
           return;
         }
-        setFetchError(err instanceof Error ? err.message : 'Failed to load profile');
+        setFetchError(msg);
       })
       .finally(() => {
         setFetching(false);
@@ -96,10 +102,15 @@ export default function DriverHomeScreen() {
   const handleToggleOnline = useCallback((online: boolean) => {
     setOnline(online);
     setStatus(online ? 'ONLINE_IDLE' : 'OFFLINE');
+    diagLogger.log('ONLINE_TOGGLE', online ? 'going-online' : 'going-offline');
     if (online) {
-      driverAPI.setOnline(driver?.vehicle_type, driver?.vehicle_number).catch(() => {});
+      driverAPI.setOnline(driver?.vehicle_type, driver?.vehicle_number)
+        .then(() => diagLogger.log('ONLINE_ACK', `rideType=${driver?.vehicle_type} vehicle=${driver?.vehicle_number}`))
+        .catch((e) => diagLogger.log('ONLINE_API_ERROR', e instanceof Error ? e.message : String(e)));
     } else {
-      driverAPI.setOffline().catch(() => {});
+      driverAPI.setOffline()
+        .then(() => diagLogger.log('OFFLINE_ACK'))
+        .catch((e) => diagLogger.log('OFFLINE_API_ERROR', e instanceof Error ? e.message : String(e)));
     }
   }, [setOnline, setStatus, driver?.vehicle_type, driver?.vehicle_number]);
 
@@ -120,6 +131,7 @@ export default function DriverHomeScreen() {
     setIsMenuOpen(false);
     setTimeout(() => {
       logout();
+      useRideStore.getState().clearRide();
       router.replace('/(auth)/login');
     }, 350);
   }, [logout, router]);

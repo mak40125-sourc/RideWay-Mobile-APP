@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getWebSocketUrl } from '../services/api';
+import { diagLogger } from '../utils/diagLog';
 import type { RideRequest } from '../types/ride';
 
 interface UseWebSocketCallbacks {
@@ -16,9 +17,15 @@ export function useWebSocket(callbacks: UseWebSocketCallbacks) {
 
     const connect = async () => {
       const token = await AsyncStorage.getItem('supabase_token');
-      if (!token) return;
+      if (!token) {
+        diagLogger.log('SOCKET_NO_TOKEN', 'stopping; no auth token');
+        return;
+      }
 
       const wsUrl = getWebSocketUrl();
+      diagLogger.setSocketUrl(wsUrl);
+      diagLogger.setNetwork('UNKNOWN');
+      diagLogger.log('SOCKET_CONNECTING', wsUrl);
       const socket = io(wsUrl, {
         auth: { token },
         transports: ['websocket'],
@@ -29,11 +36,18 @@ export function useWebSocket(callbacks: UseWebSocketCallbacks) {
       });
 
       socket.on('connect', () => {
-        console.log('WebSocket connected');
+        if (!mounted) return;
+        diagLogger.setSocketId(socket.id ?? null);
+        diagLogger.setNetwork('UP');
+        diagLogger.log('SOCKET_CONNECTED', `sid=${socket.id} (room: driver:[driver-id])`);
       });
 
       socket.on('ride:request', (data: any) => {
         if (!mounted) return;
+        diagLogger.log(
+          'SOCKET_EVENT_RIDE_REQUEST',
+          `rideId=${data?.rideId} raw=${JSON.stringify(data)?.slice(0, 220)}`
+        );
         const request: RideRequest = {
           rideId: data.rideId,
           pickup: data.pickup,
@@ -47,11 +61,24 @@ export function useWebSocket(callbacks: UseWebSocketCallbacks) {
       });
 
       socket.on('disconnect', (reason) => {
-        console.log('WebSocket disconnected:', reason);
+        diagLogger.setNetwork('DOWN');
+        diagLogger.setSocketId(null);
+        diagLogger.log('SOCKET_DISCONNECT', `reason=${reason}`);
       });
 
       socket.on('connect_error', (err) => {
-        console.log('WebSocket connection error:', err.message);
+        diagLogger.setNetwork('DOWN');
+        diagLogger.log('SOCKET_ERROR', err?.message ?? String(err));
+      });
+
+      socket.on('reconnect_attempt', (attempt) => {
+        diagLogger.log('SOCKET_RECONNECT_ATTEMPT', `attempt=${attempt}`);
+      });
+
+      socket.on('reconnect', (attempt) => {
+        diagLogger.setNetwork('UP');
+        diagLogger.setSocketId(socket.id ?? null);
+        diagLogger.log('SOCKET_RECONNECTED', `attempt=${attempt} socket.id=${socket.id}`);
       });
 
       socketRef.current = socket;

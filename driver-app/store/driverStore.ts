@@ -15,6 +15,7 @@ interface DriverState {
   is_online: boolean;
   earnings_today: number;
   kycDocuments: KYCDocument[];
+  _hasHydrated: boolean;
   
   setDriver: (driver: Driver) => void;
   setStatus: (status: DriverStatus) => void;
@@ -36,6 +37,7 @@ export const useDriverStore = create<DriverState>()(
       is_online: false,
       earnings_today: 0,
       kycDocuments: [],
+      _hasHydrated: false,
 
       setDriver: (driver) => set({ driver }),
       setStatus: (status) => set({ status }),
@@ -54,6 +56,17 @@ export const useDriverStore = create<DriverState>()(
     {
       name: 'driver-storage',
       storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => ({
+        driver: state.driver,
+        status: state.status,
+        location: state.location,
+        is_online: state.is_online,
+        earnings_today: state.earnings_today,
+        kycDocuments: state.kycDocuments,
+      }),
+      onRehydrateStorage: () => () => {
+        useDriverStore.setState({ _hasHydrated: true });
+      },
     }
   )
 );

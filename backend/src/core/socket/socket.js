@@ -1,5 +1,6 @@
 const { Server } = require('socket.io');
 const { supabaseAdmin } = require('../database/supabase');
+const { logger } = require('../logger/logger');
 
 let io = null;
 
@@ -30,11 +31,14 @@ function initSocket(httpServer) {
   });
 
   io.on('connection', (socket) => {
-    console.log(`Driver connected via WebSocket: ${socket.userId}`);
-    socket.join(`driver:${socket.userId}`);
+    const room = `driver:${socket.userId}`;
+    socket.join(room);
+    logger.info({ type: 'socket', event: 'connected', userId: socket.userId, socketId: socket.id });
+    logger.info({ type: 'socket', event: 'room_joined', userId: socket.userId, socketId: socket.id, room });
 
     socket.on('disconnect', (reason) => {
-      console.log(`Driver disconnected: ${socket.userId} (${reason})`);
+      logger.info({ type: 'socket', event: 'disconnected', userId: socket.userId, socketId: socket.id, reason });
+      logger.info({ type: 'socket', event: 'room_left', userId: socket.userId, socketId: socket.id, room });
     });
   });
 

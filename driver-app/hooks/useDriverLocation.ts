@@ -3,6 +3,7 @@ import * as Location from 'expo-location';
 import { useDriverStore } from '../store/driverStore';
 import { driverAPI } from '../services/driverAPI';
 import { GPS_UPDATE_INTERVAL } from '../constants/wallet';
+import { diagLogger } from '../utils/diagLog';
 
 export const useDriverLocation = () => {
   const { setLocation } = useDriverStore();
@@ -23,8 +24,9 @@ export const useDriverLocation = () => {
         accuracy: 0,
         timestamp: now,
       });
-    } catch {
-      // Silent: location sync failure should not break tracking
+      diagLogger.log('LOCATION_UPDATE', `lat=${coords.latitude.toFixed(5)} lng=${coords.longitude.toFixed(5)}`);
+    } catch (e) {
+      diagLogger.log('LOCATION_API_ERROR', e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -32,10 +34,12 @@ export const useDriverLocation = () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
+        diagLogger.log('LOCATION_PERMISSION_DENIED');
         setError('Location permission denied');
         return;
       }
 
+      diagLogger.log('LOCATION_TRACK_START', `intervalMs=${GPS_UPDATE_INTERVAL}`);
       setIsTracking(true);
 
       watchSubscription.current = await Location.watchPositionAsync(
@@ -55,6 +59,7 @@ export const useDriverLocation = () => {
         }
       );
     } catch (err) {
+      diagLogger.log('LOCATION_TRACK_ERROR', err instanceof Error ? err.message : String(err));
       setError('Failed to start location tracking');
     }
   };
@@ -64,6 +69,7 @@ export const useDriverLocation = () => {
       watchSubscription.current.remove();
       watchSubscription.current = null;
     }
+    diagLogger.log('LOCATION_TRACK_STOP');
     setIsTracking(false);
   };
 

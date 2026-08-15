@@ -17,8 +17,8 @@ export interface Ride {
   rider_id: string;
   driver_id: string | null;
   status: RideStatus;
-  pickup_location: Location;
-  drop_location: Location;
+  pickup_location: Location | null;
+  drop_location: Location | null;
   fare: number;
   distance: number;
   duration: number;

@@ -1,10 +1,26 @@
 import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
+import { Stack, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { AuthProvider } from "../contexts/AuthContext";
+import { useRideReconciliation } from "../hooks/useRideReconciliation";
+import { diagLogger } from "../utils/diagLog";
 
 SplashScreen.preventAutoHideAsync();
+
+function RideStateReconciler() {
+  useRideReconciliation();
+  return null;
+}
+
+function RouteTracker() {
+  const pathname = usePathname();
+  useEffect(() => {
+    diagLogger.setRoute(pathname);
+    diagLogger.log('NAVIGATE', pathname);
+  }, [pathname]);
+  return null;
+}
 
 export default function RootLayout() {
   const [loaded] = useFonts({
@@ -20,6 +36,8 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (loaded) {
+      diagLogger.log('APP_LAUNCH');
+      diagLogger.setRoute('/');
       SplashScreen.hideAsync();
     }
   }, [loaded]);
@@ -28,6 +46,8 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
+      <RideStateReconciler />
+      <RouteTracker />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(driver)" />

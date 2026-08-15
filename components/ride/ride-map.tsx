@@ -1,4 +1,3 @@
-import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
@@ -17,57 +16,24 @@ type Props = {
     longitudeDelta: number;
   };
   routePath?: Coordinates[];
-  showDriverMotion?: boolean;
+  driverLocation?: Coordinates | null;
+  driverLabel?: string;
+  edgePaddingBottom?: number;
 };
-
-function interpolatePoint(start: Coordinates, end: Coordinates, progress: number): Coordinates {
-  return {
-    latitude: start.latitude + (end.latitude - start.latitude) * progress,
-    longitude: start.longitude + (end.longitude - start.longitude) * progress,
-  };
-}
-
-function getPointAlongRoute(routePath: Coordinates[], progress: number) {
-  if (routePath.length === 0) {
-    return null;
-  }
-
-  if (routePath.length === 1) {
-    return routePath[0];
-  }
-
-  const clampedProgress = Math.max(0, Math.min(1, progress));
-  const routeProgress = clampedProgress * (routePath.length - 1);
-  const startIndex = Math.min(routePath.length - 2, Math.floor(routeProgress));
-  const localProgress = routeProgress - startIndex;
-
-  return interpolatePoint(routePath[startIndex], routePath[startIndex + 1], localProgress);
-}
-
-function getRouteHeading(routePath: Coordinates[], progress: number) {
-  if (routePath.length < 2) {
-    return 0;
-  }
-
-  const clampedProgress = Math.max(0, Math.min(1, progress));
-  const routeProgress = clampedProgress * (routePath.length - 1);
-  const startIndex = Math.min(routePath.length - 2, Math.floor(routeProgress));
-  const current = routePath[startIndex];
-  const next = routePath[startIndex + 1];
-
-  return (Math.atan2(next.longitude - current.longitude, next.latitude - current.latitude) * 180) / Math.PI;
-}
 
 export function RideMap({
   pickup,
   dropoff,
   region,
   routePath: providedRoutePath,
-  showDriverMotion = false,
+  driverLocation,
+  driverLabel,
+  edgePaddingBottom = 260,
 }: Props) {
   const mapRef = useRef<MapView | null>(null);
   const [mapReady, setMapReady] = useState(false);
-  const [driverProgress, setDriverProgress] = useState(showDriverMotion ? 0 : 1);
+  const fittedOnceRef = useRef(false);
+  const hadDriverRef = useRef(false);
 
   const routePath = useMemo(() => {
     if (providedRoutePath?.length) {
@@ -77,43 +43,23 @@ export function RideMap({
     return dropoff ? [pickup, dropoff] : [pickup];
   }, [dropoff, pickup, providedRoutePath]);
 
-  useEffect(() => {
-    if (!showDriverMotion || routePath.length < 2) {
-      setDriverProgress(1);
-      return;
+  const fitPoints = useMemo(() => {
+    if (driverLocation) {
+      return [driverLocation, ...routePath];
     }
-
-    setDriverProgress(0.08);
-
-    const durationMs = 13000;
-    const frameMs = 80;
-    const totalSteps = durationMs / frameMs;
-    const stepSize = 0.84 / totalSteps;
-
-    const timer = setInterval(() => {
-      setDriverProgress((current) => {
-        const next = Math.min(0.92, current + stepSize);
-
-        if (next >= 0.92) {
-          clearInterval(timer);
-        }
-
-        return next;
-      });
-    }, frameMs);
-
-    return () => clearInterval(timer);
-  }, [routePath, showDriverMotion]);
-
-  const driverPoint = showDriverMotion ? getPointAlongRoute(routePath, driverProgress) : null;
-  const driverHeading = showDriverMotion ? getRouteHeading(routePath, driverProgress) : 0;
-  const traveledPath =
-    showDriverMotion && driverPoint
-      ? routePath.filter((_, index) => index / Math.max(routePath.length - 1, 1) <= driverProgress)
-      : [];
+    return routePath;
+  }, [driverLocation, routePath]);
 
   useEffect(() => {
     if (!mapRef.current || !mapReady) {
+      return;
+    }
+
+    const hasDriver = !!driverLocation;
+    const driverAppeared = hasDriver && !hadDriverRef.current;
+    hadDriverRef.current = hasDriver;
+
+    if (fittedOnceRef.current && !driverAppeared) {
       return;
     }
 
@@ -122,12 +68,11 @@ export function RideMap({
         return;
       }
 
-      if (dropoff || (showDriverMotion && driverPoint)) {
-        const pointsToFit = [...routePath];
-        if (driverPoint) pointsToFit.push(driverPoint);
+      fittedOnceRef.current = true;
 
-        mapRef.current.fitToCoordinates(pointsToFit, {
-          edgePadding: buildMapEdgePadding(260),
+      if (dropoff || hasDriver) {
+        mapRef.current.fitToCoordinates(fitPoints, {
+          edgePadding: buildMapEdgePadding(edgePaddingBottom),
           animated: true,
         });
         return;
@@ -139,7 +84,7 @@ export function RideMap({
     const timeout = setTimeout(runFit, 160);
 
     return () => clearTimeout(timeout);
-  }, [driverPoint, dropoff, mapReady, region, routePath, showDriverMotion]);
+  }, [dropoff, driverLocation, edgePaddingBottom, fitPoints, mapReady, region]);
 
   return (
     <>
@@ -154,25 +99,26 @@ export function RideMap({
         pitchEnabled>
         <Marker coordinate={pickup} title="Pickup" pinColor="#111827" />
         {dropoff ? <Polyline coordinates={routePath} strokeColor="#f7c948" strokeWidth={5} /> : null}
-        {traveledPath.length > 1 ? <Polyline coordinates={traveledPath} strokeColor="#111827" strokeWidth={6} /> : null}
         {dropoff ? <Marker coordinate={dropoff} title="Drop-off" pinColor="#ef4444" /> : null}
-        {driverPoint ? (
-          <Marker
-            coordinate={driverPoint}
-            anchor={{ x: 0.5, y: 0.5 }}
-            rotation={driverHeading}
-            flat
-            tracksViewChanges={showDriverMotion}>
-            <View style={styles.driverMarker}>
-              <View style={styles.driverPulse} />
-              <View style={styles.driverMarkerCore}>
-                <MaterialCommunityIcons name="car" size={18} color="#f8f4ee" />
+        {driverLocation ? (
+          <>
+            <Polyline coordinates={[driverLocation, pickup]} strokeColor="#374151" strokeWidth={3} lineDashPattern={[2, 4]} />
+            <Marker coordinate={driverLocation} anchor={{ x: 0.5, y: 0.5 }}>
+              <View style={styles.driverMarker}>
+                <View style={styles.driverPulse} />
+                <View style={styles.driverMarkerCore}>
+                  <Text style={styles.driverMarkerGlyph}>{driverLabel?.[0]?.toUpperCase() ?? "V"}</Text>
+                </View>
               </View>
-              <View style={styles.driverBubble}>
-                <Text style={styles.driverBubbleText}>Driver</Text>
-              </View>
-            </View>
-          </Marker>
+            </Marker>
+            {driverLabel ? (
+              <Marker coordinate={driverLocation} anchor={{ x: 0.5, y: 0 }}>
+                <View style={styles.driverBubble}>
+                  <Text style={styles.driverBubbleText}>{driverLabel}</Text>
+                </View>
+              </Marker>
+            ) : null}
+          </>
         ) : null}
       </MapView>
       <View pointerEvents="none" style={styles.mapShade} />

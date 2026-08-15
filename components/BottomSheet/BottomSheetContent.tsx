@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
 
 import { useHomeStore } from "../../store/homeStore";
@@ -11,8 +11,9 @@ import { FlowSheet } from "../flow/FlowSheet";
 import { PressableScale } from "../flow/PressableScale";
 import { flowTiming } from "../../constants/flow-motion";
 import { calculateRideFare } from "../ride/ride-helpers";
-import { rideOptions } from "../ride/ride-config";
+import { RIDE_ICON_ASSETS, rideOptions } from "../ride/ride-config";
 import { searchDestinations } from "../../services/places";
+import { rideLog } from "../../utils/ride-request-diagnostics";
 import type { SearchResult } from "../home/types";
 
 type Props = {
@@ -63,6 +64,7 @@ export function BottomSheetContent({ onSelectDestination, onRequestRide, onCance
   const status = useRideStore((s) => s.status);
   const requesting = useRideStore((s) => s.requesting);
   const trip = useRideStore((s) => s.trip);
+  const rideError = useRideStore((s) => s.error);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pickupDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -454,6 +456,7 @@ export function BottomSheetContent({ onSelectDestination, onRequestRide, onCance
                 const isSelected = selectedOption.label === option.label;
                 const fare = calculateRideFare(option, estimate.distance, estimate.duration);
                 const meta = getOptionMeta(option.label);
+                const iconSource = RIDE_ICON_ASSETS[option.vehicleType];
                 return (
                   <AnimatedSection key={option.label} visible={showDestOptions} delay={i * 40}>
                     <PressableScale
@@ -477,17 +480,21 @@ export function BottomSheetContent({ onSelectDestination, onRequestRide, onCance
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
                         <View
                           style={{
-                            width: 40,
-                            height: 40,
+                            width: 48,
+                            height: 48,
                             borderRadius: 12,
                             backgroundColor: "#F5F5F5",
                             alignItems: "center",
                             justifyContent: "center",
                           }}
                         >
-                          <Text style={{ color: "#111111", fontSize: 12, fontFamily: "GeneralSans-Bold" }}>
-                            {meta.icon}
-                          </Text>
+                          {iconSource ? (
+                            <Image source={iconSource} style={{ width: 44, height: 44, resizeMode: "contain" }} />
+                          ) : (
+                            <Text style={{ color: "#111111", fontSize: 12, fontFamily: "GeneralSans-Bold" }}>
+                              {meta.icon}
+                            </Text>
+                          )}
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={{ color: "#111111", fontSize: 16, fontFamily: "GeneralSans-Bold" }}>
@@ -507,12 +514,14 @@ export function BottomSheetContent({ onSelectDestination, onRequestRide, onCance
               })}
 
               <PressableScale
+                disabled={requesting}
                 onPress={() => {
+                  rideLog("FIND_RIDE_PRESSED", { status, requesting, hasTrip: !!trip });
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   onRequestRide();
                 }}
                 style={{
-                  backgroundColor: "#111111",
+                  backgroundColor: requesting ? "#6B7280" : "#111111",
                   borderRadius: 18,
                   height: 56,
                   alignItems: "center",
@@ -531,6 +540,21 @@ export function BottomSheetContent({ onSelectDestination, onRequestRide, onCance
                   Find Ride - {selectedOption.label} Rs {calculateRideFare(selectedOption, estimate.distance, estimate.duration)}
                 </Text>
               </PressableScale>
+
+              {rideError && (
+                <Text
+                  style={{
+                    color: "#DC2626",
+                    fontSize: 13,
+                    fontFamily: "GeneralSans-Regular",
+                    textAlign: "center",
+                    marginTop: -8,
+                    marginBottom: 4,
+                  }}
+                >
+                  {rideError}
+                </Text>
+              )}
             </>
           )}
         </View>
@@ -608,6 +632,57 @@ export function BottomSheetContent({ onSelectDestination, onRequestRide, onCance
                 Rs {bookingFare}
               </Text>
             </View>
+
+            {rideError && (
+              <>
+                <View
+                  style={{
+                    backgroundColor: "#FEF2F2",
+                    borderRadius: 12,
+                    padding: 12,
+                    marginBottom: 12,
+                    alignSelf: "stretch",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "#DC2626",
+                      fontSize: 13,
+                      fontFamily: "GeneralSans-Regular",
+                      textAlign: "center",
+                    }}
+                  >
+                    {rideError}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    rideLog("FIND_RIDE_RETRY_PRESSED", { status, requesting, hasTrip: !!trip });
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    onRequestRide();
+                  }}
+                  style={{
+                    backgroundColor: "#111111",
+                    borderRadius: 14,
+                    height: 48,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    alignSelf: "stretch",
+                    marginBottom: 12,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontSize: 15,
+                      fontFamily: "GeneralSans-Bold",
+                    }}
+                  >
+                    Try again
+                  </Text>
+                </Pressable>
+              </>
+            )}
 
             <Pressable onPress={onCancelRide} style={{ paddingVertical: 8 }}>
               <Text

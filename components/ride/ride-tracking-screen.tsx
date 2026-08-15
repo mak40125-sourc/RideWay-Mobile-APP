@@ -1,34 +1,52 @@
 import { router } from "expo-router";
 import { useEffect } from "react";
-import { Alert, Text, View } from "react-native";
+import { Alert, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "../../context/auth-context";
-import { useRideStore, type RideStatus } from "../../context/ride-store";
+import { useRideStore } from "../../context/ride-store";
 import { buildMapRegion } from "../../utils/map-region";
-import { DriverMatchingView } from "./driver-matching-view";
+import { useActiveRideDiscovery } from "../../hooks/useActiveRideDiscovery";
 import { RideMap } from "./ride-map";
+import { RideStateScreen } from "./ride-state-screen";
 import { rideStyles as styles } from "./ride-styles";
+import { RIDE_SHEET_BASE_HEIGHT, RideStatusSheet } from "./ride-status-sheet";
 import { RideTopBar } from "./ride-top-bar";
 import { FlowView } from "../flow/FlowView";
-import { PressableScale } from "../flow/PressableScale";
+import { rideLog, setDiagnosticScreen } from "../../utils/ride-request-diagnostics";
 
 export function RideTrackingScreen() {
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const trip = useRideStore((s) => s.trip);
   const status = useRideStore((s) => s.status);
-  const setStatus = useRideStore((s) => s.setStatus);
   const rideId = useRideStore((s) => s.rideId);
-  const setRideId = useRideStore((s) => s.setRideId);
+  const driver = useRideStore((s) => s.driver);
   const resetRide = useRideStore((s) => s.resetRide);
-  const simulateDriverAssignment = useRideStore((s) => s.simulateDriverAssignment);
+
+  useEffect(() => {
+    setDiagnosticScreen("TRACKING");
+    rideLog("RIDE_TRACKING_MOUNTED", { rideId, userId: user?.id ?? null, status });
+  }, [rideId, user, status]);
+
+  useActiveRideDiscovery();
 
   const region = trip ? buildMapRegion(trip.pickup, trip.dropoff) : null;
 
-  if (!trip || !region) return null;
+  if (!trip || !region) {
+    return (
+      <RideStateScreen
+        loading
+        title="Looking for your ride"
+        description="Restoring your active ride from the server."
+      />
+    );
+  }
 
-  const hasDriver = status === "DRIVER_ASSIGNED" || status === "DRIVER_ARRIVING" || status === "RIDE_STARTED";
+  const isSearching = status === "REQUESTING" || status === "SEARCHING_DRIVER";
 
   const handleCompleteRide = () => {
+    rideLog("NAVIGATION", { to: "/complete", reason: "tracking.button", rideId, status });
     router.push("/complete");
   };
 
@@ -39,14 +57,18 @@ export function RideTrackingScreen() {
         text: "Yes, Cancel",
         style: "destructive",
         onPress: async () => {
+          rideLog("TRACKING_CANCEL_CONFIRMED", { rideId, userId: user?.id ?? null, status });
           try {
             const { cancelRide } = await import("../../services/ride.service");
             if (user && rideId) {
               await cancelRide(rideId);
             }
             resetRide();
+            rideLog("NAVIGATION", { to: "/", reason: "tracking.cancel", rideId, status });
+            rideLog("TRACKING_NAVIGATE_TO_HOME", { rideId, userId: user?.id ?? null, via: "cancel" });
             router.replace("/");
           } catch (error) {
+            rideLog("TRACKING_CANCEL_FAILED", { rideId, userId: user?.id ?? null, message: error instanceof Error ? error.message : String(error) });
             Alert.alert("Error", error instanceof Error ? error.message : "Failed to cancel ride");
           }
         },
@@ -54,124 +76,33 @@ export function RideTrackingScreen() {
     ]);
   };
 
-  const statusMessages: Record<string, { title: string; subtitle: string }> = {
-    DRIVER_ASSIGNED: { title: "Driver assigned!", subtitle: `Your ${trip.option.label} is on the way to pickup.` },
-    DRIVER_ARRIVING: { title: "Driver arriving", subtitle: "Your driver is almost here." },
-    RIDE_STARTED: { title: "Ride in progress", subtitle: "Enjoy your trip!" },
-    RIDE_COMPLETED: { title: "Ride complete", subtitle: "Thanks for riding with RideWay!" },
-  };
-
-  const statusInfo = statusMessages[status] || {
-    title: "Tracking your ride",
-    subtitle: "Follow your trip in real time.",
-  };
-
-  useEffect(() => {
-    if (!user || status === "RIDE_COMPLETED" || status === "CANCELLED") return;
-
-    let cancelled = false;
-    let hasRealDriver = false;
-
-    const pollStatus = async () => {
-      try {
-        const { getRiderActiveRide } = await import("../../services/ride.service");
-        const activeRide = await getRiderActiveRide(user.id);
-        if (!cancelled && activeRide) {
-          hasRealDriver = true;
-          setStatus(activeRide.status as RideStatus);
-          if (!rideId) setRideId(activeRide.id);
-        }
-      } catch {
-        // backend not available — will use simulation fallback
-      }
-    };
-
-    void pollStatus();
-    const interval = setInterval(pollStatus, 5000);
-
-    const simulationTimer = setTimeout(() => {
-      if (!cancelled && !hasRealDriver && (status === "SEARCHING_DRIVER" || status === "REQUESTING")) {
-        simulateDriverAssignment();
-      }
-    }, 8000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-      clearTimeout(simulationTimer);
-    };
-  }, [user, status, rideId, setStatus, setRideId, simulateDriverAssignment]);
-
-  const isSearching = status === "REQUESTING" || status === "SEARCHING_DRIVER";
+  const sheetBottomInset = RIDE_SHEET_BASE_HEIGHT + insets.bottom;
 
   return (
     <FlowView>
       <View style={styles.screen}>
-        <RideMap pickup={trip.pickup} dropoff={trip.dropoff} region={region} routePath={trip.path} showDriverMotion />
+        <RideMap
+          pickup={trip.pickup}
+          dropoff={trip.dropoff}
+          region={region}
+          routePath={trip.path}
+          driverLocation={driver?.location ?? null}
+          driverLabel={driver?.name}
+          edgePaddingBottom={sheetBottomInset}
+        />
 
         {isSearching ? (
-          <>
-            <RideTopBar title="Finding your driver" subtitle="Looking for nearby drivers to accept your ride." />
-            <DriverMatchingView
-              vehicleLabel={trip.option.label}
-              fare={trip.fare}
-              onCancel={handleCancelRide}
-            />
-          </>
-        ) : (
-          <>
-            <RideTopBar title={statusInfo.title} subtitle={statusInfo.subtitle} />
+          <RideTopBar title="Finding your driver" subtitle="Looking for nearby drivers to accept your ride." />
+        ) : null}
 
-            <View style={styles.compactCard}>
-              <View style={styles.sectionCard}>
-                <Text style={styles.sectionLabel}>Driver status</Text>
-                <Text style={styles.sectionTitle}>
-                  {hasDriver
-                    ? `Driver assigned for ${trip.option.label}`
-                    : status === "RIDE_COMPLETED"
-                    ? "Trip completed"
-                    : `Searching for ${trip.option.label}`}
-                </Text>
-                <Text style={styles.sectionText}>
-                  {status === "RIDE_COMPLETED"
-                    ? "You have reached your destination."
-                    : "Your driver is on the way to your pickup location."}
-                </Text>
-              </View>
-
-              <View style={styles.compactStatsRow}>
-                <View style={styles.compactStat}>
-                  <Text style={styles.sectionLabel}>Fare</Text>
-                  <Text style={styles.compactStatValue}>Rs {trip.fare}</Text>
-                </View>
-                <View style={styles.compactStat}>
-                  <Text style={styles.sectionLabel}>Status</Text>
-                  <Text style={styles.compactStatValue}>{status.replace(/_/g, " ")}</Text>
-                </View>
-              </View>
-
-              {status === "RIDE_STARTED" && (
-                <PressableScale style={styles.primaryButton} onPress={handleCompleteRide}>
-                  <Text style={styles.primaryButtonText}>End ride</Text>
-                </PressableScale>
-              )}
-
-              {status !== "RIDE_COMPLETED" && status !== "RIDE_STARTED" && (
-                <PressableScale onPress={handleCancelRide}>
-                  <Text style={[styles.back, { color: "#dc2626" }]}>Cancel this ride</Text>
-                </PressableScale>
-              )}
-
-              {status === "RIDE_COMPLETED" && (
-                <PressableScale
-                  style={styles.primaryButton}
-                  onPress={handleCompleteRide}>
-                  <Text style={styles.primaryButtonText}>View trip summary</Text>
-                </PressableScale>
-              )}
-            </View>
-          </>
-        )}
+        <RideStatusSheet
+          status={status}
+          trip={trip}
+          driver={driver}
+          onCancel={handleCancelRide}
+          onEndRide={handleCompleteRide}
+          onViewSummary={handleCompleteRide}
+        />
       </View>
     </FlowView>
   );

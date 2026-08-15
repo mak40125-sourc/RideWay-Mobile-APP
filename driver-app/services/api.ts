@@ -105,7 +105,9 @@ async function request<T>(
   if (!response.ok) {
     const errorData = await response.json().catch(() => null);
     const message = errorData?.error || errorData?.message || `Request failed with ${response.status}`;
-    throw new Error(message);
+    const error = new Error(message) as Error & { status?: number };
+    error.status = response.status;
+    throw error;
   }
 
   if (response.status === 204) {

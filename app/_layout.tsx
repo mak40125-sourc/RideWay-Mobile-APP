@@ -1,5 +1,5 @@
 import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
+import { Stack, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
@@ -8,6 +8,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider, useAuth } from "../context/auth-context";
 import { LoginScreen } from "../components/auth/login-screen";
 import { ProfileCreationScreen } from "../components/profile/profile-creation-screen";
+import { rideLog, setDiagnosticScreen } from "../utils/ride-request-diagnostics";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -39,6 +40,32 @@ export default function RootLayout() {
 
 function RootNavigator() {
   const { loading, isAuthenticated, user, refreshProfile } = useAuth();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    // Reflect the current routed screen so every diagnostic log can attribute
+    // the step to the screen the rider is actually on.
+    setDiagnosticScreen(pathname && pathname !== "/" ? pathname.replace(/^\//, "").toUpperCase() : pathname === "/" ? "HOME" : "AUTH");
+  }, [pathname]);
+
+  useEffect(() => {
+    // Surface unhandled JS exceptions so an interrupted searching/booking
+    // step is visible in the trace instead of silently aborting.
+    if (!__DEV__) return;
+
+    const errorUtils = (globalThis as {
+      ErrorUtils?: { setGlobalHandler: (h: (e: unknown, isFatal?: boolean) => void) => void };
+    }).ErrorUtils;
+
+    if (!errorUtils) return;
+
+    errorUtils.setGlobalHandler((error, isFatal) => {
+      rideLog("UNHANDLED_EXCEPTION", {
+        isFatal: !!isFatal,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }, []);
 
   if (loading) {
     return (

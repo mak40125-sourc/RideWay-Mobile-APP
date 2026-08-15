@@ -1,5 +1,3 @@
-const { supabaseAdmin } = require('../../core/database/supabase');
-const redisService = require('../../core/redis/redis.service');
 const driverService = require('./driver.service');
 
 exports.updateLocation = async (req, res) => {
@@ -11,7 +9,7 @@ exports.updateLocation = async (req, res) => {
       return res.status(400).json({ error: 'Valid location (latitude, longitude) is required' });
     }
 
-    await redisService.setDriverLocation(userId, location.latitude, location.longitude);
+    await driverService.updateLocation(userId, location);
 
     res.status(200).json({ message: 'Location updated' });
   } catch (error) {
@@ -24,11 +22,7 @@ exports.setOnline = async (req, res) => {
     const { isOnline, rideType, vehicleNumber } = req.body;
     const userId = req.user.id;
 
-    if (isOnline) {
-      await redisService.setDriverOnline(userId, { rideType, vehicleNumber });
-    } else {
-      await redisService.setDriverOffline(userId);
-    }
+    await driverService.setOnline(userId, { isOnline, rideType, vehicleNumber });
 
     res.status(200).json({ message: `Driver is now ${isOnline ? 'online' : 'offline'}` });
   } catch (error) {
@@ -44,11 +38,7 @@ exports.getNearbyDrivers = async (req, res) => {
       return res.status(400).json({ error: 'lat and lng query parameters are required' });
     }
 
-    const drivers = await redisService.getNearbyDrivers(
-      parseFloat(lat),
-      parseFloat(lng),
-      parseFloat(radius)
-    );
+    const drivers = await driverService.getNearbyDrivers(lat, lng, radius);
 
     res.status(200).json(drivers);
   } catch (error) {

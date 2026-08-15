@@ -1,5 +1,5 @@
 import * as Location from "expo-location";
-import { router } from "expo-router";
+import { router, usePathname } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
 import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
@@ -17,19 +17,26 @@ import { flowLayers } from "../../constants/flow-motion";
 import { useHomeStore } from "../../store/homeStore";
 import { useRideStore } from "../../context/ride-store";
 import { useAuth } from "../../context/auth-context";
+import { useActiveRideDiscovery } from "../../hooks/useActiveRideDiscovery";
 import { getRouteEstimate } from "../../services/osrm";
 import { calculateRideFare } from "../../components/ride/ride-helpers";
 import { cancelRide } from "../../services/ride.service";
 import { ProfileSurface } from "./profile-screen";
 import type { SearchResult } from "../../components/home/types";
+import { rideLog, setDiagnosticScreen } from "../../utils/ride-request-diagnostics";
 
 export function RiderHomeScreen() {
+  const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const sheetRef = useRef<BottomSheet>(null);
   const sheetIndex = useSharedValue(0);
   const { user } = useAuth();
   const profile = useFlowSurface();
   const { open: surfaceOpen, visible: surfaceVisible, present: presentProfile, dismiss: dismissProfile } = profile;
+
+  useEffect(() => {
+    setDiagnosticScreen("HOME");
+  }, []);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -65,9 +72,15 @@ export function RiderHomeScreen() {
   const setTrip = useRideStore((s) => s.setTrip);
   const requestRideAction = useRideStore((s) => s.requestRideAction);
   const resetRide = useRideStore((s) => s.resetRide);
-  const simulateDriverAssignment = useRideStore((s) => s.simulateDriverAssignment);
   const rideStatus = useRideStore((s) => s.status);
   const rideId = useRideStore((s) => s.rideId);
+  const requesting = useRideStore((s) => s.requesting);
+
+  // While the rider is on the home route and a ride is being searched for,
+  // poll the backend for the active ride so DRIVER_ASSIGNED can be discovered
+  // from the searching state itself (no reliance on the tracking screen being
+  // mounted). Backend truth only — never invents a status.
+  useActiveRideDiscovery(pathname === "/" && (rideStatus === "SEARCHING_DRIVER" || rideStatus === "REQUESTING"));
 
   const effectivePickupCoords = useMemo(() => {
     if (selectedPickup?.geometry?.coordinates) {
@@ -172,9 +185,18 @@ export function RiderHomeScreen() {
   }, [selectedDestination]);
 
   const handleRequestRide = useCallback(() => {
-    if (!effectivePickupCoords || !destinationCoords || !estimate || !user) return;
+    if (requesting) {
+      rideLog("RIDE_BUTTON_PRESSED_GUARDED", { userId: user?.id ?? null, hasPickup: !!effectivePickupCoords, hasDest: !!destinationCoords, hasEstimate: !!estimate, reason: "already requesting" });
+      return;
+    }
+    if (!effectivePickupCoords || !destinationCoords || !estimate || !user) {
+      rideLog("RIDE_BUTTON_PRESSED_GUARDED", { userId: user?.id ?? null, hasPickup: !!effectivePickupCoords, hasDest: !!destinationCoords, hasEstimate: !!estimate });
+      return;
+    }
 
     const fare = calculateRideFare(selectedOption, estimate.distance, estimate.duration);
+
+    rideLog("RIDE_BUTTON_PRESSED", { userId: user.id, vehicleType: selectedOption.vehicleType ?? selectedOption.label.toLowerCase(), fare });
 
     setTrip({
       pickup: effectivePickupCoords,
@@ -187,28 +209,26 @@ export function RiderHomeScreen() {
     });
 
     requestRideAction(user.id, { navigateToTracking: false });
-  }, [effectivePickupCoords, destinationCoords, estimate, selectedOption, setTrip, requestRideAction, user]);
+  }, [effectivePickupCoords, destinationCoords, estimate, selectedOption, setTrip, requestRideAction, user, requesting]);
 
   const handleCancelRide = useCallback(() => {
+    rideLog("HOME_RIDE_CANCELLED", { rideId, userId: user?.id ?? null });
     if (rideId) {
       cancelRide(rideId).catch(() => {}).finally(() => resetRide());
     } else {
       resetRide();
     }
-  }, [rideId, resetRide]);
+  }, [rideId, resetRide, user]);
 
   useEffect(() => {
-    if (rideStatus === "SEARCHING_DRIVER" && rideId) {
-      const timer = setTimeout(() => simulateDriverAssignment(), 4000);
-      return () => clearTimeout(timer);
-    }
-  }, [rideStatus, rideId, simulateDriverAssignment]);
-
-  useEffect(() => {
-    if (rideStatus === "DRIVER_ASSIGNED") {
+    // Navigate to tracking once a real backend-driven assignment arrives while
+    // the rider is still on the home route.
+    if (rideStatus === "DRIVER_ASSIGNED" && pathname === "/") {
+      rideLog("NAVIGATION", { to: "/tracking", reason: "home.DRIVER_ASSIGNED effect", rideId, userId: user?.id ?? null });
+      rideLog("HOME_NAVIGATE_TO_TRACKING", { rideId, userId: user?.id ?? null });
       router.push("/tracking");
     }
-  }, [rideStatus]);
+  }, [rideStatus, rideId, user, pathname]);
 
   const world = useMemo(
     () => (

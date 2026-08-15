@@ -1,12 +1,33 @@
 import { api } from './api';
 import { supabase } from '../lib/supabase';
-import type { Ride, RideStatus } from '../types/ride';
+import type { Location, Ride, RideStatus } from '../types/ride';
+
+// PostgREST serializes PostGIS geography/geometry columns as EWKB hex.
+// 2D Point with SRID (25 bytes, little-endian):
+//   byteOrder(1) | type(4) | srid(4) | x(8) | y(8)
+// WKT order is POINT(longitude latitude), so x = longitude, y = latitude.
+function decodeEwkbPoint(hex: string): Location | null {
+  if (typeof hex !== 'string' || !/^[0-9a-fA-F]+$/.test(hex)) return null;
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  if (bytes.length !== 25 || bytes[0] !== 1) return null; // little-endian only
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.length);
+  if (view.getUint32(1, true) !== 0x20000001) return null; // Point + SRID-present flag
+  if (view.getUint32(5, true) !== 4326) return null;        // this app is always SRID 4326
+  return { latitude: view.getFloat64(17, true), longitude: view.getFloat64(9, true) };
+}
 
 function transformRide(raw: any): Ride {
-  const coords = (loc: any) => ({
-    latitude: loc?.coordinates?.[1] ?? loc?.latitude ?? 0,
-    longitude: loc?.coordinates?.[0] ?? loc?.longitude ?? 0,
-  });
+  const coords = (loc: any): Location | null => {
+    if (typeof loc === 'string') return decodeEwkbPoint(loc);
+    if (loc?.coordinates?.[1] != null && loc?.coordinates?.[0] != null) {
+      return { latitude: loc.coordinates[1], longitude: loc.coordinates[0] };
+    }
+    if (loc?.latitude != null && loc?.longitude != null) {
+      return { latitude: loc.latitude, longitude: loc.longitude };
+    }
+    return null; // explicit invalid/missing — caller must handle, never {0,0}
+  };
 
   return {
     id: raw.id,
@@ -38,8 +59,9 @@ export const rideAPI = {
     try {
       const raw = await api.get<any>(`/rides/${rideId}`);
       return transformRide(raw);
-    } catch {
-      return null;
+    } catch (err: any) {
+      if (err?.status === 404) return null;
+      throw err;
     }
   },
 
