@@ -6,6 +6,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { AuthProvider, useAuth } from "../context/auth-context";
+import { useHomeStore } from "../store/homeStore";
 import { LoginScreen } from "../components/auth/login-screen";
 import { ProfileCreationScreen } from "../components/profile/profile-creation-screen";
 import { rideLog, setDiagnosticScreen } from "../utils/ride-request-diagnostics";
@@ -41,6 +42,13 @@ export default function RootLayout() {
 function RootNavigator() {
   const { loading, isAuthenticated, user, refreshProfile } = useAuth();
   const pathname = usePathname();
+
+  useEffect(() => {
+    // Start the permission/GPS chain while auth restoration is still in
+    // flight. The store's guard makes this exactly-once; the home screen
+    // calls the same action as a fallback.
+    void useHomeStore.getState().bootstrapLocation();
+  }, []);
 
   useEffect(() => {
     // Reflect the current routed screen so every diagnostic log can attribute

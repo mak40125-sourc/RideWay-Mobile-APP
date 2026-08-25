@@ -1,7 +1,6 @@
-import * as Location from "expo-location";
 import { router, usePathname } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
 import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSharedValue } from "react-native-reanimated";
@@ -59,10 +58,6 @@ export function RiderHomeScreen() {
   const selectedOption = useHomeStore((s) => s.selectedOption);
   const setSheetIndex = useHomeStore((s) => s.setSheetIndex);
 
-  const setLocation = useHomeStore((s) => s.setLocation);
-  const setPermissionDenied = useHomeStore((s) => s.setPermissionDenied);
-  const setLoadingLocation = useHomeStore((s) => s.setLoadingLocation);
-  const setIsRefreshingLocation = useHomeStore((s) => s.setIsRefreshingLocation);
   const setQuery = useHomeStore((s) => s.setQuery);
   const setResults = useHomeStore((s) => s.setResults);
   const setSelectedDestination = useHomeStore((s) => s.setSelectedDestination);
@@ -96,49 +91,14 @@ export function RiderHomeScreen() {
 
   const avatarInitial = user?.full_name?.[0]?.toUpperCase() ?? "U";
 
-  const loadCurrentLocation = useCallback(
-    async (showInitialLoader = false) => {
-      if (showInitialLoader) setLoadingLocation(true);
-      else setIsRefreshingLocation(true);
-
-      const timeoutId = setTimeout(() => {
-        setLoadingLocation(false);
-        setIsRefreshingLocation(false);
-      }, 10000);
-
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== "granted") {
-          setPermissionDenied(true);
-          return;
-        }
-
-        let current = await Location.getLastKnownPositionAsync({});
-        if (!current) {
-          current = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          });
-        }
-
-        setPermissionDenied(false);
-        setLocation({
-          latitude: current.coords.latitude,
-          longitude: current.coords.longitude,
-        });
-      } catch {
-        setPermissionDenied(true);
-      } finally {
-        clearTimeout(timeoutId);
-        setLoadingLocation(false);
-        setIsRefreshingLocation(false);
-      }
-    },
-    [setLocation, setPermissionDenied, setLoadingLocation, setIsRefreshingLocation],
-  );
+  // The permission/GPS bootstrap lives in homeStore so it can start during
+  // auth restoration (kicked off by the root layout). This effect is a
+  // fallback for direct mounts; the store guard keeps it exactly-once.
+  const bootstrapLocation = useHomeStore((s) => s.bootstrapLocation);
 
   useEffect(() => {
-    loadCurrentLocation(true);
-  }, [loadCurrentLocation]);
+    void bootstrapLocation();
+  }, [bootstrapLocation]);
 
   const handleSelectDestination = useCallback(
     async (item: SearchResult, title: string) => {
@@ -236,7 +196,18 @@ export function RiderHomeScreen() {
         <FlowParallax progress={sheetIndex} factor={flowLayers.map} style={styles.mapLayer}>
           {location ? (
             <RideMap location={location} destinationCoords={destinationCoords} routePath={estimate?.path} />
-          ) : null}
+          ) : (
+            <View style={styles.mapPlaceholder}>
+              {loadingLocation ? (
+                <ActivityIndicator size="small" color="#111111" />
+              ) : (
+                <Text style={styles.mapPlaceholderIcon}>📍</Text>
+              )}
+              <Text style={styles.mapPlaceholderText}>
+                {loadingLocation ? "Finding your pickup point…" : "Location unavailable. Make sure location services are on."}
+              </Text>
+            </View>
+          )}
         </FlowParallax>
 
         <FlowParallax
@@ -288,6 +259,7 @@ export function RiderHomeScreen() {
       insets,
       sheetIndex,
       location,
+      loadingLocation,
       destinationCoords,
       estimate,
       avatarInitial,
@@ -305,20 +277,7 @@ export function RiderHomeScreen() {
     [dismissProfile]
   );
 
-  if (loadingLocation) {
-    return (
-      <FlowView>
-        <View style={styles.centered}>
-          <Text style={styles.loadingTitle}>Finding your pickup point</Text>
-          <Text style={styles.loadingSubtitle}>
-            We&apos;re setting up the rider home screen around your live location.
-          </Text>
-        </View>
-      </FlowView>
-    );
-  }
-
-  if (permissionDenied || !location) {
+  if (permissionDenied) {
     return (
       <FlowView>
         <View style={[styles.centered, { paddingHorizontal: 28 }]}>
@@ -350,6 +309,23 @@ const styles = StyleSheet.create({
   },
   mapLayer: {
     flex: 1,
+  },
+  mapPlaceholder: {
+    flex: 1,
+    backgroundColor: "#F7F7F7",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 10,
+  },
+  mapPlaceholderIcon: {
+    fontSize: 24,
+  },
+  mapPlaceholderText: {
+    color: "#6B7280",
+    fontSize: 14,
+    fontFamily: "GeneralSans-Regular",
+    textAlign: "center",
+    paddingHorizontal: 28,
   },
   centered: {
     flex: 1,

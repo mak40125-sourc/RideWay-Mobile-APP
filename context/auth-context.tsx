@@ -30,28 +30,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const authUserRef = useRef<User | null>(null);
   authUserRef.current = authUser;
 
+  // Supabase fires both getSession() (restoreSession below) and an
+  // INITIAL_SESSION event through onAuthStateChange at startup. Both funnel
+  // into applySession; this slot guarantees at most ONE getProfile() request
+  // per user + access token instead of two concurrent duplicates.
+  const profileFetchRef = useRef<{
+    userId: string;
+    accessToken: string;
+    promise: Promise<UserProfile | null>;
+  } | null>(null);
+
+  const fetchProfileShared = useCallback((userId: string, accessToken: string) => {
+    const cached = profileFetchRef.current;
+    if (cached && cached.userId === userId && cached.accessToken === accessToken) {
+      return cached.promise;
+    }
+
+    // The entry is intentionally kept after resolution so a duplicate
+    // applySession for the same session reuses it; a new access token or an
+    // explicit refreshProfile() overwrites the slot with a fresh request.
+    const promise = getProfile(userId);
+    profileFetchRef.current = { userId, accessToken, promise };
+    return promise;
+  }, []);
+
   const applySession = useCallback(async (session: Session | null) => {
     const version = sessionVersion.current + 1;
     sessionVersion.current = version;
     const accessToken = session?.access_token ?? null;
 
+    // The AsyncStorage mirror write starts immediately but runs in parallel
+    // with the profile fetch; both are awaited before this resolves so the
+    // navigator never unblocks before the mirror is consistent.
+    let storageOp: Promise<void> = Promise.resolve();
     if (accessToken && accessToken !== lastAppliedAccessToken.current) {
-      await setAuthToken(accessToken);
+      storageOp = setAuthToken(accessToken);
     } else if (!accessToken && lastAppliedAccessToken.current) {
-      await clearAuthToken();
+      storageOp = clearAuthToken();
     }
-
     lastAppliedAccessToken.current = accessToken;
+
     const sessionUser = session?.user ?? null;
     setAuthUser(sessionUser);
 
     if (!sessionUser) {
       setUser(null);
+      await storageOp;
       return;
     }
 
     try {
-      const profile = await getProfile(sessionUser.id);
+      const [profile] = await Promise.all([
+        fetchProfileShared(sessionUser.id, accessToken ?? ""),
+        storageOp,
+      ]);
       if (sessionVersion.current === version) {
         setUser(profile);
       }
@@ -60,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
       }
     }
-  }, []);
+  }, [fetchProfileShared]);
 
   useEffect(() => {
     let isMounted = true;
@@ -103,7 +135,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const profile = await getProfile(currentUser.id);
+    // Force a fresh fetch (e.g. right after profile creation): overwrite any
+    // cached slot so concurrent applySession calls share this new request
+    // instead of starting their own.
+    const accessToken = lastAppliedAccessToken.current ?? "";
+    const promise = getProfile(currentUser.id);
+    profileFetchRef.current = { userId: currentUser.id, accessToken, promise };
+    const profile = await promise;
     setUser(profile);
   }, []);
 
