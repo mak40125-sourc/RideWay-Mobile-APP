@@ -63,6 +63,24 @@ exports.getRiderName = async (riderId) => {
 
 // ── Supabase: rides ───────────────────────────────────────────────
 exports.acceptRide = async (rideId, rideData, driverId) => {
+  // Prefer atomic accept if ride row already exists (new idempotent creation flow).
+  // Fall back to legacy accept_ride which handles both insert and update.
+  try {
+    const { data, error } = await supabaseAdmin.rpc('accept_ride_atomic', {
+      p_ride_id: rideId,
+      p_driver_id: driverId,
+    });
+    if (!error && data) return Array.isArray(data) ? data[0] : data;
+    if (error && !error.message.includes('Ride not found')) {
+      // Idempotent hit or conflict — surface as is
+      if (error.message.includes('already assigned') || error.message.includes('not in accept-able')) {
+        throw error;
+      }
+    }
+  } catch (e) {
+    if (e.status === 409) throw e;
+    // Fall through to legacy path for rides that haven't been inserted yet
+  }
   const { data, error } = await supabaseAdmin.rpc('accept_ride', {
     p_ride_id: rideId,
     p_rider_id: rideData.riderId,
@@ -77,6 +95,15 @@ exports.acceptRide = async (rideId, rideData, driverId) => {
     p_pickup_address: rideData.pickupAddress || '',
     p_drop_address: rideData.dropAddress || '',
   });
-  if (error) return null;
-  return data;
+  if (error) {
+    const msg = error.message || '';
+    if (msg.includes('already assigned') || msg.includes('Invalid transition') || msg.includes('not in accept-able')) {
+      const err = new Error(msg);
+      err.status = 409;
+      throw err;
+    }
+    if (msg.includes('Ride not found')) return null;
+    throw error;
+  }
+  return Array.isArray(data) ? data[0] : data;
 };

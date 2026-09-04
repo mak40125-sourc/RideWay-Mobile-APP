@@ -95,15 +95,16 @@ export type RideRequestResult = {
 };
 
 export async function requestRide(
-  payload: RideRequestPayload,
+  payload: RideRequestPayload & { idempotencyKey?: string },
   trace?: { traceId?: string; attempt?: number }
 ): Promise<RideRequestResult> {
-  rideLog("API_REQUEST_RIDE_START", { userId: payload.riderId, traceId: trace?.traceId, attempt: trace?.attempt });
+  rideLog("API_REQUEST_RIDE_START", { userId: payload.riderId, traceId: trace?.traceId, attempt: trace?.attempt, idempotencyKey: (payload as unknown as { idempotencyKey?: string }).idempotencyKey });
   try {
     const result = await api.post<{ data: RideRequestResult; status: number }>("/rides/request", payload, {
       withStatus: true,
       traceId: trace?.traceId,
       attempt: trace?.attempt,
+      idempotencyKey: (payload as unknown as { idempotencyKey?: string }).idempotencyKey,
     });
     // Real backend ride request: the rideId shown is always the one the
     // backend returned — the app never generates a rideId locally.

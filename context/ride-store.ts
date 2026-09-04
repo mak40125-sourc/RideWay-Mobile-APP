@@ -7,6 +7,16 @@ import { requestRide } from "../services/ride.service";
 import { rideLog } from "../utils/ride-request-diagnostics";
 
 let requestAttemptCounter = 0;
+let pendingIdempotencyKey: string | null = null;
+
+function generateIdempotencyKey(): string {
+  // Use crypto.randomUUID when available, fallback to trace-style random
+  try {
+    const c = globalThis.crypto as unknown as { randomUUID?: () => string } | undefined;
+    if (c?.randomUUID) return c.randomUUID();
+  } catch {}
+  return `idem-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 function isValidCoords(c: Coordinates | null | undefined): c is Coordinates {
   return (
@@ -141,6 +151,8 @@ export const useRideStore = create<RideState & RideActions>()(
     if (prev === "REQUESTING" || prev === "SEARCHING_DRIVER" || prev === "DRIVER_ASSIGNED") {
       rideLog("STATE_RESET", { from: prev, to: "IDLE", reason: "setTrip", rideId: get().rideId });
     }
+    pendingIdempotencyKey = generateIdempotencyKey();
+    rideLog("RIDE_IDEMPOTENCY_CREATED", { idempotencyKey: pendingIdempotencyKey });
     set({
       trip: {
         pickup: params.pickup,
@@ -189,6 +201,8 @@ export const useRideStore = create<RideState & RideActions>()(
     rideLog("RIDE_STATUS_CHANGED", { userId, status: "REQUESTING", from: state.status, attempt, traceId });
 
     try {
+      const idempotencyKey = pendingIdempotencyKey || generateIdempotencyKey();
+      pendingIdempotencyKey = idempotencyKey;
       const result = await requestRide({
         riderId: userId,
         pickup,
@@ -199,6 +213,7 @@ export const useRideStore = create<RideState & RideActions>()(
         vehicleType: option.vehicleType ?? option.label.toLowerCase(),
         passengerName: passengerName ?? undefined,
         passengerPhone: passengerPhone ?? undefined,
+        idempotencyKey,
       }, { traceId, attempt });
 
       rideLog("RIDE_RESPONSE_RECEIVED", { userId, rideId: result.rideId, candidateCount: result.candidateCount, attempt, traceId });
@@ -209,7 +224,10 @@ export const useRideStore = create<RideState & RideActions>()(
         status: "SEARCHING_DRIVER",
         requesting: false,
       });
-      rideLog("REQUEST_ACTION_SUCCESS", { userId, attempt, traceId, rideId: result.rideId, status: "SEARCHING_DRIVER", requesting: false, tripPresent: !!get().trip });
+      if ((result as unknown as { idempotencyHit?: boolean }).idempotencyHit) {
+        rideLog("RIDE_IDEMPOTENCY_HIT", { userId, rideId: result.rideId, idempotencyKey, attempt, traceId });
+      }
+      rideLog("REQUEST_ACTION_SUCCESS", { userId, attempt, traceId, rideId: result.rideId, status: "SEARCHING_DRIVER", requesting: false, tripPresent: !!get().trip, idempotencyHit: !!(result as unknown as { idempotencyHit?: boolean }).idempotencyHit });
       rideLog("RIDE_STATUS_CHANGED", { userId, rideId: result.rideId, status: "SEARCHING_DRIVER", from: "REQUESTING", attempt, traceId });
 
       if (navigateToTracking) {
@@ -323,6 +341,7 @@ export const useRideStore = create<RideState & RideActions>()(
     console.log(`[RIDEWAY-DIAG] RIDER_ACTIVE_RIDE_CLEARED ts=${ts} rideId=${get().rideId ?? 'null'} from=${prev} to=IDLE reason=resetRide`);
     rideLog("STATE_RESET", { from: prev, to: "IDLE", reason: "resetRide", rideId: get().rideId });
     rideLog("RIDE_RESET", { rideId: get().rideId });
+    pendingIdempotencyKey = null;
     set({
       trip: null,
       status: "IDLE",

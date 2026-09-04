@@ -20,30 +20,47 @@ const normalizeCoords = (point) => {
   return { lat, lng, address: point.address || '' };
 };
 
-const createRideRequest = async (riderId, pickup, dropoff, fare, distance, duration, vehicleType, passenger) => {
+const createRideRequest = async (riderId, pickup, dropoff, fare, distance, duration, vehicleType, passenger, options = {}) => {
   const correlationId = currentCorrelationId();
+  const idempotencyKey = options.idempotencyKey || passenger?.idempotencyKey || null;
 
-  // Idempotency: if rider already has an active ride, return it instead of creating a duplicate.
-  // Protects against: request sent → backend persisted → response lost → app retries/crashes → new request.
-  try {
-    const { supabaseAdmin } = require('../../core/database/supabase');
-    const ACTIVE_STATUSES = ['REQUESTED', 'SEARCHING_DRIVER', 'DRIVER_ASSIGNED', 'DRIVER_ARRIVING', 'RIDE_STARTED'];
-    const freshnessThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const { data: existing } = await supabaseAdmin
-      .from('rides')
-      .select('id')
-      .eq('rider_id', riderId)
-      .in('status', ACTIVE_STATUSES)
-      .gte('updated_at', freshnessThreshold)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (existing?.id) {
-      logger.info({ type: 'stage', correlationId, stage: '2', stageName: 'ride_create_duplicate_prevented', riderId, existingRideId: existing.id });
-      return { rideId: existing.id, candidateCount: 0, passengerName: passenger?.passengerName || null, passengerPhone: passenger?.passengerPhone || null, recovered: true };
-    }
-  } catch {
-    // best-effort idempotency check; fall through to create new ride on error
+  // DB-enforced idempotency: if same rider+key seen before, return existing ride without side effects.
+  if (idempotencyKey) {
+    try {
+      const { supabaseAdmin } = require('../../core/database/supabase');
+      const { data: existingByKey } = await supabaseAdmin
+        .from('rides')
+        .select('id')
+        .eq('rider_id', riderId)
+        .eq('idempotency_key', idempotencyKey)
+        .maybeSingle();
+      if (existingByKey?.id) {
+        logger.info({ type: 'stage', correlationId, stage: '2', stageName: 'ride_idempotency_hit', riderId, existingRideId: existingByKey.id, idempotencyKey });
+        return { rideId: existingByKey.id, candidateCount: 0, passengerName: passenger?.passengerName || null, passengerPhone: passenger?.passengerPhone || null, recovered: true, idempotencyHit: true };
+      }
+    } catch {}
+  }
+
+  // Fallback guard: prevent two active rides without explicit key (double-tap)
+  if (!idempotencyKey) {
+    try {
+      const { supabaseAdmin } = require('../../core/database/supabase');
+      const ACTIVE_STATUSES = ['REQUESTED', 'SEARCHING_DRIVER', 'DRIVER_ASSIGNED', 'DRIVER_ARRIVING', 'RIDE_STARTED'];
+      const freshnessThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data: existing } = await supabaseAdmin
+        .from('rides')
+        .select('id')
+        .eq('rider_id', riderId)
+        .in('status', ACTIVE_STATUSES)
+        .gte('updated_at', freshnessThreshold)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (existing?.id) {
+        logger.info({ type: 'stage', correlationId, stage: '2', stageName: 'ride_create_duplicate_prevented', riderId, existingRideId: existing.id });
+        return { rideId: existing.id, candidateCount: 0, passengerName: passenger?.passengerName || null, passengerPhone: passenger?.passengerPhone || null, recovered: true };
+      }
+    } catch {}
   }
 
   const rideId = crypto.randomUUID();
@@ -61,7 +78,46 @@ const createRideRequest = async (riderId, pickup, dropoff, fare, distance, durat
     await matchingRepository.setRidePassenger(rideId, passengerName, passengerPhone).catch(() => {});
   }
 
-  stage(correlationId, '2', 'ride_created', { rideId, riderId, pickup: pickupCoords, dropoff: dropoffCoords, vehicleType });
+  stage(correlationId, '2', 'ride_created', { rideId, riderId, pickup: pickupCoords, dropoff: dropoffCoords, vehicleType, idempotencyKey: idempotencyKey || undefined });
+
+  // Postgres authoritative row first (idempotent) — Redis is ephemeral scratch.
+  try {
+    const rideRepository = require('../ride/ride.repository');
+    const dbRide = await rideRepository.createRideIdempotent({
+      rideId,
+      riderId,
+      pickupLat: pickupCoords.lat,
+      pickupLng: pickupCoords.lng,
+      dropLat: dropoffCoords.lat,
+      dropLng: dropoffCoords.lng,
+      pickupAddress: pickupCoords.address,
+      dropAddress: dropoffCoords.address,
+      fare,
+      distance,
+      duration,
+      idempotencyKey,
+    });
+    // If DB returned a different id (idempotency hit race), adopt it and skip Redis/ matching side-effects.
+    if (dbRide && dbRide.id !== rideId) {
+      logger.info({ type: 'stage', correlationId, stage: '2', stageName: 'ride_idempotency_created_race', riderId, requestedRideId: rideId, existingRideId: dbRide.id, idempotencyKey });
+      return { rideId: dbRide.id, candidateCount: 0, passengerName: passenger?.passengerName || null, passengerPhone: passenger?.passengerPhone || null, recovered: true, idempotencyHit: true };
+    }
+    logger.info({ type: 'stage', correlationId, stage: '2', stageName: 'ride_idempotency_created', rideId, riderId, idempotencyKey: idempotencyKey || null });
+  } catch (e) {
+    // If create fails due to unique violation, treat as hit
+    const msg = e.message || '';
+    if (msg.includes('duplicate') || msg.includes('unique') || e.code === '23505') {
+      try {
+        const { supabaseAdmin } = require('../../core/database/supabase');
+        const { data: existingByKey } = await supabaseAdmin.from('rides').select('id').eq('rider_id', riderId).eq('idempotency_key', idempotencyKey).maybeSingle();
+        if (existingByKey?.id) {
+          logger.info({ type: 'stage', correlationId, stage: '2', stageName: 'ride_idempotency_hit_after_error', riderId, existingRideId: existingByKey.id });
+          return { rideId: existingByKey.id, candidateCount: 0, passengerName: passenger?.passengerName || null, passengerPhone: passenger?.passengerPhone || null, recovered: true, idempotencyHit: true };
+        }
+      } catch {}
+    }
+    throw e;
+  }
 
   await matchingRepository.createRideRequest(rideId, {
     riderId,

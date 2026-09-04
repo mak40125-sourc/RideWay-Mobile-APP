@@ -96,17 +96,19 @@ type HttpClientOptions = {
   withStatus?: boolean;
   traceId?: string;
   attempt?: number;
+  idempotencyKey?: string;
 };
 
 async function request<T>(
   endpoint: string,
   options: HttpClientOptions = {}
 ): Promise<T> {
-  const { method = "GET", body, withStatus = false, traceId, attempt } = options;
+  const { method = "GET", body, withStatus = false, traceId, attempt, idempotencyKey } = options;
   const trace = traceId ?? `http-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
   const url = `${API_BASE_URL}${endpoint}`;
   const headers = await getHeaders();
+  if (idempotencyKey) headers['x-idempotency-key'] = idempotencyKey;
 
   let response: Response;
 
@@ -190,7 +192,7 @@ async function request<T>(
 
 export const api = {
   get: <T>(endpoint: string) => request<T>(endpoint, { method: "GET" }),
-  post: <T>(endpoint: string, body: unknown, options?: { withStatus?: boolean; traceId?: string; attempt?: number }) =>
+  post: <T>(endpoint: string, body: unknown, options?: { withStatus?: boolean; traceId?: string; attempt?: number; idempotencyKey?: string }) =>
     request<T>(endpoint, { method: "POST", body, ...options }),
   put: <T>(endpoint: string, body: unknown) => request<T>(endpoint, { method: "PUT", body }),
   delete: <T>(endpoint: string) => request<T>(endpoint, { method: "DELETE" }),

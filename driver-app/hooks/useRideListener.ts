@@ -47,6 +47,14 @@ export const useRideListener = (options?: UseRideListenerOptions) => {
       currentRideIdRef.current = rideId;
 
       const sub = rideAPI.subscribeToRideUpdates(rideId, (updatedRide) => {
+        const incoming = updatedRide.status;
+        const cur = useRideStore.getState().current_ride?.status;
+        const curOrder = statusOrder(cur);
+        const incOrder = statusOrder(incoming);
+        if (curOrder !== null && incOrder !== null && incOrder < curOrder) {
+          diagLogger.log('RIDE_STALE_TRANSITION', `rideId=${rideId} cur=${cur} incoming=${incoming} ignored`);
+          return;
+        }
         diagLogger.log('RIDE_UPDATE_EVENT', `rideId=${rideId} status=${updatedRide.status}`);
         setCurrentRide(updatedRide);
         options?.onRideUpdate?.();
@@ -61,3 +69,9 @@ export const useRideListener = (options?: UseRideListenerOptions) => {
 
   return { clearRide };
 };
+
+function statusOrder(s?: string | null): number | null {
+  const ORDER: Record<string, number> = { REQUESTED: 0, SEARCHING_DRIVER: 1, DRIVER_ASSIGNED: 2, DRIVER_ARRIVING: 3, RIDE_STARTED: 4, RIDE_COMPLETED: 5, CANCELLED: 5 };
+  if (!s) return null;
+  return ORDER[s] ?? null;
+}

@@ -73,11 +73,27 @@ export function useRiderRideSocket(enabled = true) {
           console.log(`[RIDEWAY-DIAG] RIDER_SOCKET_RIDE_EVENT ts=${ts} ignored rideId mismatch current=${currentId} payload=${payload?.rideId}`);
           return;
         }
+        // State-safe: never regress from terminal; ignore stale/lower-order events
+        const ORDER: Record<string, number> = { REQUESTING: 0, SEARCHING_DRIVER: 1, DRIVER_ASSIGNED: 2, DRIVER_ARRIVING: 3, RIDE_STARTED: 4, RIDE_COMPLETED: 5, CANCELLED: 5 };
+        const curOrder = ORDER[currentStatus] ?? -1;
+        const incomingOrder = ORDER[payload?.status as string] ?? -1;
+        if (curOrder >= 5 && incomingOrder < 5) {
+          rideLog("RIDE_STALE_TRANSITION", { rideId: payload?.rideId, currentStatus, incomingStatus: payload?.status, reason: "terminal wins" });
+          return;
+        }
+        if (incomingOrder !== -1 && curOrder !== -1 && incomingOrder < curOrder) {
+          rideLog("RIDE_STALE_TRANSITION", { rideId: payload?.rideId, currentStatus, incomingStatus: payload?.status, reason: "stale order" });
+          return;
+        }
         if (payload?.status === "RIDE_COMPLETED") {
           // eslint-disable-next-line no-console
           console.log(`[RIDEWAY-DIAG] RIDER_RIDE_STATE_UPDATED ts=${new Date().toISOString()} rideId=${payload.rideId} from=${currentStatus} to=RIDE_COMPLETED source=socket`);
           rideLog("RIDER_RIDE_STATE_UPDATED", { rideId: payload.rideId, from: currentStatus, to: "RIDE_COMPLETED", source: "socket" });
           useRideStore.getState().setStatus("RIDE_COMPLETED");
+        } else if (payload?.status && ORDER[payload.status] !== undefined) {
+          // For non-terminal but authoritative forward progress, hydrate via recovery instead of blind setStatus
+          // Rely on useRideRecovery to fetch full ride; socket is acceleration only.
+          rideLog("RIDER_SOCKET_FORWARD", { rideId: payload?.rideId, status: payload?.status, from: currentStatus });
         }
       });
 
