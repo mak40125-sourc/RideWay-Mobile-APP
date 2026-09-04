@@ -1,5 +1,7 @@
 import { router } from "expo-router";
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Coordinates, RideOption } from "../components/home/types";
 import { requestRide } from "../services/ride.service";
 import { rideLog } from "../utils/ride-request-diagnostics";
@@ -81,6 +83,7 @@ type RideState = {
 
   driver: DriverInfo | null;
   driverId: string | null;
+  _hasHydrated: boolean;
 };
 
 type RideActions = {
@@ -119,16 +122,19 @@ type RideActions = {
   resetRide: () => void;
 };
 
-export const useRideStore = create<RideState & RideActions>((set, get) => ({
-  trip: null,
+export const useRideStore = create<RideState & RideActions>()(
+  persist(
+    (set, get) => ({
+      trip: null,
 
-  status: "IDLE",
-  rideId: null,
-  requesting: false,
-  error: null,
+      status: "IDLE",
+      rideId: null,
+      requesting: false,
+      error: null,
 
-  driver: null,
-  driverId: null,
+      driver: null,
+      driverId: null,
+      _hasHydrated: false,
 
   setTrip: (params) => {
     const prev = get().status;
@@ -327,4 +333,20 @@ export const useRideStore = create<RideState & RideActions>((set, get) => ({
       driverId: null,
     });
   },
-}));
+    }),
+    {
+      name: "rider-ride-storage",
+      storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => ({
+        trip: state.trip,
+        status: state.status,
+        rideId: state.rideId,
+        driverId: state.driverId,
+        driver: state.driver,
+      }),
+      onRehydrateStorage: () => () => {
+        useRideStore.setState({ _hasHydrated: true });
+      },
+    }
+  )
+);

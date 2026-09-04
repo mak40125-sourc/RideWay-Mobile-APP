@@ -137,6 +137,10 @@ export async function getRiderActiveRide(riderId: string): Promise<Ride | null> 
   return api.get<Ride | null>(`/rides/rider/${riderId}/active`);
 }
 
+export async function getMyActiveRide(): Promise<Ride | null> {
+  return api.get<Ride | null>(`/rides/rider/active`);
+}
+
 export async function getRiderRideHistory(riderId: string): Promise<Ride[]> {
   return api.get<Ride[]>(`/rides/rider/${riderId}/history`);
 }

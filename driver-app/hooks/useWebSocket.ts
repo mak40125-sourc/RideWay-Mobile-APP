@@ -82,6 +82,36 @@ export function useWebSocket(callbacks: UseWebSocketCallbacks) {
         diagLogger.setNetwork('UP');
         diagLogger.setSocketId(socket.id ?? null);
         diagLogger.log('SOCKET_RECONNECTED', `attempt=${attempt} socket.id=${socket.id}`);
+        diagLogger.log('RIDE_RECONCILIATION_STARTED', `socket_reconnect attempt=${attempt}`);
+        void (async () => {
+          try {
+            const { rideAPI } = await import('../services/rideAPI');
+            const { useRideStore } = await import('../store/rideStore');
+            const { useDriverStore } = await import('../store/driverStore');
+            const ride = await rideAPI.getMyActiveRide();
+            if (ride) {
+              diagLogger.log('RIDE_RECONCILIATION_COMPLETED', `rideId=${ride.id} status=${ride.status} source=socket_reconnect`);
+              // Map backend ride status to driver status locally
+              const mapStatus = (s: string) => {
+                switch (s) {
+                  case 'DRIVER_ASSIGNED': return 'NAVIGATING_TO_PICKUP';
+                  case 'DRIVER_ARRIVING': return 'ARRIVED_AT_PICKUP';
+                  case 'RIDE_STARTED': return 'NAVIGATING_TO_DROP';
+                  default: return null;
+                }
+              };
+              const mapped = mapStatus(ride.status);
+              if (mapped) {
+                useRideStore.getState().setCurrentRide(ride);
+                useDriverStore.getState().setStatus(mapped as unknown as import('../types/driver').DriverStatus);
+              }
+            } else {
+              diagLogger.log('RIDE_RECONCILIATION_COMPLETED', 'no active ride on socket_reconnect');
+            }
+          } catch (err) {
+            diagLogger.log('RIDE_RECOVERY_FAILED', `socket_reconnect err=${err instanceof Error ? err.message : String(err)}`);
+          }
+        })();
       });
 
       socketRef.current = socket;

@@ -22,6 +22,30 @@ const normalizeCoords = (point) => {
 
 const createRideRequest = async (riderId, pickup, dropoff, fare, distance, duration, vehicleType, passenger) => {
   const correlationId = currentCorrelationId();
+
+  // Idempotency: if rider already has an active ride, return it instead of creating a duplicate.
+  // Protects against: request sent → backend persisted → response lost → app retries/crashes → new request.
+  try {
+    const { supabaseAdmin } = require('../../core/database/supabase');
+    const ACTIVE_STATUSES = ['REQUESTED', 'SEARCHING_DRIVER', 'DRIVER_ASSIGNED', 'DRIVER_ARRIVING', 'RIDE_STARTED'];
+    const freshnessThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data: existing } = await supabaseAdmin
+      .from('rides')
+      .select('id')
+      .eq('rider_id', riderId)
+      .in('status', ACTIVE_STATUSES)
+      .gte('updated_at', freshnessThreshold)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (existing?.id) {
+      logger.info({ type: 'stage', correlationId, stage: '2', stageName: 'ride_create_duplicate_prevented', riderId, existingRideId: existing.id });
+      return { rideId: existing.id, candidateCount: 0, passengerName: passenger?.passengerName || null, passengerPhone: passenger?.passengerPhone || null, recovered: true };
+    }
+  } catch {
+    // best-effort idempotency check; fall through to create new ride on error
+  }
+
   const rideId = crypto.randomUUID();
   track(correlationId, { rideId });
 

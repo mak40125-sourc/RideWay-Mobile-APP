@@ -81,6 +81,7 @@ exports.cancelRide = async (rideId, driverId) => {
 };
 
 const ACTIVE_RIDE_FRESHNESS_MS = 24 * 60 * 60 * 1000;
+const ACTIVE_STATUSES = ['REQUESTED', 'SEARCHING_DRIVER', 'DRIVER_ASSIGNED', 'DRIVER_ARRIVING', 'RIDE_STARTED'];
 
 exports.getRiderActiveRide = async (riderId) => {
   const freshnessThreshold = new Date(Date.now() - ACTIVE_RIDE_FRESHNESS_MS).toISOString();
@@ -88,7 +89,23 @@ exports.getRiderActiveRide = async (riderId) => {
     .from('rides')
     .select('*')
     .eq('rider_id', riderId)
-    .in('status', ['REQUESTED', 'SEARCHING_DRIVER', 'DRIVER_ASSIGNED', 'DRIVER_ARRIVING', 'RIDE_STARTED'])
+    .in('status', ACTIVE_STATUSES)
+    .gte('updated_at', freshnessThreshold)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return withPassenger(data);
+};
+
+exports.getDriverActiveRide = async (driverId) => {
+  const freshnessThreshold = new Date(Date.now() - ACTIVE_RIDE_FRESHNESS_MS).toISOString();
+  const driverStatuses = ['DRIVER_ASSIGNED', 'DRIVER_ARRIVING', 'RIDE_STARTED'];
+  const { data, error } = await supabaseAdmin
+    .from('rides')
+    .select('*')
+    .eq('driver_id', driverId)
+    .in('status', driverStatuses)
     .gte('updated_at', freshnessThreshold)
     .order('created_at', { ascending: false })
     .limit(1)

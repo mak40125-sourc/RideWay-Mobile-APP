@@ -97,6 +97,35 @@ export function useRiderRideSocket(enabled = true) {
         // eslint-disable-next-line no-console
         console.log(`[RIDEWAY-DIAG] RIDER_SOCKET_RECONNECT ts=${new Date().toISOString()} sid=${socket.id}`);
         rideLog("RIDER_SOCKET_RECONNECT", { sid: socket.id });
+        rideLog("RIDE_RECONCILIATION_STARTED", { reason: "socket_reconnect", sid: socket.id });
+        // Server is authoritative — re-fetch active ride on reconnect rather than trusting missed events.
+        void (async () => {
+          try {
+            const { getMyActiveRide, decodeRideLocation } = await import("../services/ride.service");
+            const activeRide = await getMyActiveRide();
+            if (activeRide?.id && activeRide?.status) {
+              rideLog("RIDE_RECONCILIATION_COMPLETED", { rideId: activeRide.id, serverStatus: activeRide.status, source: "socket_reconnect" });
+              const pickup = decodeRideLocation(activeRide.pickup_location);
+              const dropoff = decodeRideLocation(activeRide.drop_location);
+              useRideStore.getState().hydrateActiveRide({
+                rideId: activeRide.id,
+                status: activeRide.status as unknown as string as import("../context/ride-store").RideStatus,
+                pickup,
+                dropoff,
+                pickupAddress: activeRide.pickup_address,
+                dropAddress: activeRide.drop_address,
+                fare: Number(activeRide.fare),
+                distance: Number(activeRide.distance),
+                duration: Number(activeRide.duration),
+                driverId: activeRide.driver_id,
+              });
+            } else {
+              rideLog("RIDE_RECONCILIATION_COMPLETED", { rideId: null, serverStatus: null, source: "socket_reconnect", found: false });
+            }
+          } catch (err) {
+            rideLog("RIDE_RECOVERY_FAILED", { message: err instanceof Error ? err.message : String(err), source: "socket_reconnect" });
+          }
+        })();
       });
 
       socketRef.current = socket;

@@ -106,6 +106,26 @@ exports.getRiderActiveRide = async (req, res) => {
   }
 };
 
+exports.getMyActiveRide = async (req, res) => {
+  try {
+    const riderId = req.user.id;
+    const ride = await rideService.getRiderActiveRide(riderId);
+    res.status(200).json(ride || null);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.getDriverActiveRide = async (req, res) => {
+  try {
+    const driverId = req.user.id;
+    const ride = await rideService.getDriverActiveRide(driverId);
+    res.status(200).json(ride || null);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 exports.getRiderRideHistory = async (req, res) => {
   try {
     const { riderId } = req.params;

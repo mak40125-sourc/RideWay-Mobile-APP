@@ -70,6 +70,8 @@ const cancelRide = async (rideId, driverId) => {
 
 const getRiderActiveRide = (riderId) => rideRepository.getRiderActiveRide(riderId);
 
+const getDriverActiveRide = (driverId) => rideRepository.getDriverActiveRide(driverId);
+
 const getRiderRideHistory = (riderId) => rideRepository.getRiderRideHistory(riderId);
 
 module.exports = {
@@ -80,5 +82,6 @@ module.exports = {
   completeRide,
   cancelRide,
   getRiderActiveRide,
+  getDriverActiveRide,
   getRiderRideHistory,
 };

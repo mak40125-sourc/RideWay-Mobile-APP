@@ -72,6 +72,17 @@ export const rideAPI = {
     }
   },
 
+  getMyActiveRide: async (): Promise<Ride | null> => {
+    try {
+      const raw = await api.get<any>(`/rides/driver/active`);
+      if (!raw) return null;
+      return transformRide(raw);
+    } catch (err: any) {
+      if (err?.status === 404) return null;
+      throw err;
+    }
+  },
+
   subscribeToRideUpdates: (rideId: string, callback: (ride: Ride) => void) => {
     return supabase
       .channel(`ride-${rideId}`)

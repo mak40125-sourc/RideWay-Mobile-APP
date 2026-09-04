@@ -3,6 +3,8 @@ const router = express.Router();
 const rideController = require('./ride.controller');
 const { protect } = require('../../core/middleware/auth.middleware');
 
+router.get('/rider/active', protect, rideController.getMyActiveRide);
+router.get('/driver/active', protect, rideController.getDriverActiveRide);
 router.post('/request', protect, rideController.requestRide);
 router.post('/:rideId/accept', protect, rideController.acceptRide);
 router.put('/:rideId/status', protect, rideController.updateRideStatus);
