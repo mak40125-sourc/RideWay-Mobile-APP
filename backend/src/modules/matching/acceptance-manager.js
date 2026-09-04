@@ -47,6 +47,23 @@ const acceptRide = async (rideId, driverId) => {
       throw new Error('Ride request expired or no longer available.');
     }
 
+    if (rideData.riderId === driverId) {
+      await matchingRepository.releaseRideLock(rideId);
+      logger.warn({
+        type: 'failure',
+        correlationId,
+        rideId,
+        driverId,
+        stage: '11',
+        stageName: 'self_accept_rejected',
+        rideState: 'REQUESTED',
+        driverState: 'ONLINE',
+        error: 'Rider cannot accept their own ride.',
+        elapsedMs: Date.now() - requestStart,
+      });
+      throw new Error('Rider cannot accept their own ride.');
+    }
+
     const ride = await matchingRepository.acceptRide(rideId, rideData, driverId);
 
     if (!ride) {

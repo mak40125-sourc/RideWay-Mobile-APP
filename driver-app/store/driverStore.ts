@@ -51,7 +51,7 @@ export const useDriverStore = create<DriverState>()(
         kycDocuments: [...state.kycDocuments, doc]
       })),
       clearKYCDocuments: () => set({ kycDocuments: [] }),
-      logout: () => set({ driver: null, status: 'OFFLINE', is_online: false, location: null, kycDocuments: [] }),
+      logout: () => set({ driver: null, status: 'OFFLINE', is_online: false, location: null, earnings_today: 0, kycDocuments: [] }),
     }),
     {
       name: 'driver-storage',

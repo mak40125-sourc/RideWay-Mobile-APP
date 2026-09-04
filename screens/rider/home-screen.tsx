@@ -1,6 +1,6 @@
 import { router, usePathname } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { ActivityIndicator, BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, BackHandler, StyleSheet, Text, View } from "react-native";
 import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSharedValue } from "react-native-reanimated";
@@ -20,8 +20,8 @@ import { useActiveRideDiscovery } from "../../hooks/useActiveRideDiscovery";
 import { getRouteEstimate } from "../../services/osrm";
 import { calculateRideFare } from "../../components/ride/ride-helpers";
 import { cancelRide } from "../../services/ride.service";
+import { reverseGeocode } from "../../services/places";
 import { ProfileSurface } from "./profile-screen";
-import type { SearchResult } from "../../components/home/types";
 import { rideLog, setDiagnosticScreen } from "../../utils/ride-request-diagnostics";
 
 export function RiderHomeScreen() {
@@ -51,18 +51,15 @@ export function RiderHomeScreen() {
   const location = useHomeStore((s) => s.location);
   const permissionDenied = useHomeStore((s) => s.permissionDenied);
   const loadingLocation = useHomeStore((s) => s.loadingLocation);
-  const selectedDestination = useHomeStore((s) => s.selectedDestination);
-  const selectedPickup = useHomeStore((s) => s.selectedPickup);
+  const pickup = useHomeStore((s) => s.pickup);
+  const destination = useHomeStore((s) => s.destination);
   const estimate = useHomeStore((s) => s.estimate);
-  const loadingEstimate = useHomeStore((s) => s.loadingEstimate);
   const selectedOption = useHomeStore((s) => s.selectedOption);
+  const setPickup = useHomeStore((s) => s.setPickup);
   const setSheetIndex = useHomeStore((s) => s.setSheetIndex);
-
-  const setQuery = useHomeStore((s) => s.setQuery);
-  const setResults = useHomeStore((s) => s.setResults);
-  const setSelectedDestination = useHomeStore((s) => s.setSelectedDestination);
   const setEstimate = useHomeStore((s) => s.setEstimate);
   const setLoadingEstimate = useHomeStore((s) => s.setLoadingEstimate);
+  const resetSelection = useHomeStore((s) => s.resetSelection);
 
   const setTrip = useRideStore((s) => s.setTrip);
   const requestRideAction = useRideStore((s) => s.requestRideAction);
@@ -70,59 +67,46 @@ export function RiderHomeScreen() {
   const rideStatus = useRideStore((s) => s.status);
   const rideId = useRideStore((s) => s.rideId);
   const requesting = useRideStore((s) => s.requesting);
+  const passengerMode = useHomeStore((s) => s.passengerMode);
+  const passenger = useHomeStore((s) => s.passenger);
 
-  // While the rider is on the home route and a ride is being searched for,
-  // poll the backend for the active ride so DRIVER_ASSIGNED can be discovered
-  // from the searching state itself (no reliance on the tracking screen being
-  // mounted). Backend truth only — never invents a status.
-  useActiveRideDiscovery(pathname === "/" && (rideStatus === "SEARCHING_DRIVER" || rideStatus === "REQUESTING"));
-
-  const effectivePickupCoords = useMemo(() => {
-    if (selectedPickup?.geometry?.coordinates) {
-      return {
-        latitude: selectedPickup.geometry.coordinates[1],
-        longitude: selectedPickup.geometry.coordinates[0],
-      };
-    }
-    return location;
-  }, [selectedPickup, location]);
-
-  const snapPoints = useMemo(() => ["20%", "78%", "92%"], []);
-
-  const avatarInitial = user?.full_name?.[0]?.toUpperCase() ?? "U";
-
-  // The permission/GPS bootstrap lives in homeStore so it can start during
-  // auth restoration (kicked off by the root layout). This effect is a
-  // fallback for direct mounts; the store guard keeps it exactly-once.
   const bootstrapLocation = useHomeStore((s) => s.bootstrapLocation);
 
   useEffect(() => {
     void bootstrapLocation();
   }, [bootstrapLocation]);
 
-  const handleSelectDestination = useCallback(
-    async (item: SearchResult, title: string) => {
-      setSelectedDestination(item);
-      setQuery(title);
-      setResults([]);
-    },
-    [setSelectedDestination, setQuery, setResults],
-  );
+  // Default the pickup to the device GPS fix, but only until the rider has made
+  // an explicit selection. Live GPS updates must never overwrite a manual pickup.
+  useEffect(() => {
+    if (!pickup && location) {
+      setPickup({ coordinates: location, address: null, source: "gps" });
+      reverseGeocode(location)
+        .then((addr) => {
+          const current = useHomeStore.getState().pickup;
+          if (current && current.source === "gps" && current.coordinates.latitude === location.latitude && current.coordinates.longitude === location.longitude) {
+            useHomeStore.getState().setPickup({ coordinates: location, address: addr, source: "gps" });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [location, pickup, setPickup]);
 
+  useActiveRideDiscovery(pathname === "/" && (rideStatus === "SEARCHING_DRIVER" || rideStatus === "REQUESTING"));
+
+  // Route estimate: recompute whenever pickup or destination coordinates change.
   useEffect(() => {
     let active = true;
+    const pickupCoords = pickup?.coordinates;
+    const destCoords = destination?.coordinates;
 
-    const coords = selectedDestination?.geometry?.coordinates;
-    if (!effectivePickupCoords || !coords) {
+    if (!pickupCoords || !destCoords) {
       setEstimate(null);
       return;
     }
 
     setLoadingEstimate(true);
-
-    const destinationCoords = { latitude: coords[1], longitude: coords[0] };
-
-    getRouteEstimate(effectivePickupCoords, destinationCoords)
+    getRouteEstimate(pickupCoords, destCoords)
       .then((next) => {
         if (active) setEstimate(next);
       })
@@ -136,27 +120,48 @@ export function RiderHomeScreen() {
     return () => {
       active = false;
     };
-  }, [effectivePickupCoords, selectedDestination, setEstimate, setLoadingEstimate]);
+  }, [pickup, destination, setEstimate, setLoadingEstimate]);
 
-  const destinationCoords = useMemo(() => {
-    const coords = selectedDestination?.geometry?.coordinates;
-    if (!coords) return null;
-    return { latitude: coords[1], longitude: coords[0] };
-  }, [selectedDestination]);
+  const effectivePickupCoords = pickup?.coordinates ?? location;
+  const destinationCoords = destination?.coordinates ?? null;
+
+  const handleOpenLocationSelect = useCallback(
+    (mode: "pickup" | "destination") => {
+      router.push({ pathname: "/location-select" as never, params: { mode } } as never);
+    },
+    []
+  );
 
   const handleRequestRide = useCallback(() => {
     if (requesting) {
-      rideLog("RIDE_BUTTON_PRESSED_GUARDED", { userId: user?.id ?? null, hasPickup: !!effectivePickupCoords, hasDest: !!destinationCoords, hasEstimate: !!estimate, reason: "already requesting" });
+      rideLog("RIDE_BUTTON_PRESSED_GUARDED", {
+        userId: user?.id ?? null,
+        hasPickup: !!effectivePickupCoords,
+        hasDest: !!destinationCoords,
+        hasEstimate: !!estimate,
+        reason: "already requesting",
+      });
       return;
     }
     if (!effectivePickupCoords || !destinationCoords || !estimate || !user) {
-      rideLog("RIDE_BUTTON_PRESSED_GUARDED", { userId: user?.id ?? null, hasPickup: !!effectivePickupCoords, hasDest: !!destinationCoords, hasEstimate: !!estimate });
+      rideLog("RIDE_BUTTON_PRESSED_GUARDED", {
+        userId: user?.id ?? null,
+        hasPickup: !!effectivePickupCoords,
+        hasDest: !!destinationCoords,
+        hasEstimate: !!estimate,
+      });
       return;
     }
 
     const fare = calculateRideFare(selectedOption, estimate.distance, estimate.duration);
+    const isOther = passengerMode === "other" && passenger?.name?.trim() && passenger?.phone?.trim();
 
-    rideLog("RIDE_BUTTON_PRESSED", { userId: user.id, vehicleType: selectedOption.vehicleType ?? selectedOption.label.toLowerCase(), fare });
+    rideLog("RIDE_BUTTON_PRESSED", {
+      userId: user.id,
+      vehicleType: selectedOption.vehicleType ?? selectedOption.label.toLowerCase(),
+      fare,
+      passengerMode,
+    });
 
     setTrip({
       pickup: effectivePickupCoords,
@@ -166,10 +171,27 @@ export function RiderHomeScreen() {
       distance: estimate.distance,
       duration: estimate.duration,
       path: estimate.path,
+      pickupAddress: pickup?.address ?? null,
+      dropAddress: destination?.address ?? null,
+      passengerName: isOther ? passenger!.name.trim() : null,
+      passengerPhone: isOther ? passenger!.phone.trim() : null,
     });
 
     requestRideAction(user.id, { navigateToTracking: false });
-  }, [effectivePickupCoords, destinationCoords, estimate, selectedOption, setTrip, requestRideAction, user, requesting]);
+  }, [
+    effectivePickupCoords,
+    destinationCoords,
+    estimate,
+    selectedOption,
+    setTrip,
+    requestRideAction,
+    user,
+    requesting,
+    passengerMode,
+    passenger,
+    pickup,
+    destination?.address,
+  ]);
 
   const handleCancelRide = useCallback(() => {
     rideLog("HOME_RIDE_CANCELLED", { rideId, userId: user?.id ?? null });
@@ -178,24 +200,27 @@ export function RiderHomeScreen() {
     } else {
       resetRide();
     }
-  }, [rideId, resetRide, user]);
+    resetSelection();
+  }, [rideId, resetRide, user, resetSelection]);
 
   useEffect(() => {
-    // Navigate to tracking once a real backend-driven assignment arrives while
-    // the rider is still on the home route.
     if (rideStatus === "DRIVER_ASSIGNED" && pathname === "/") {
       rideLog("NAVIGATION", { to: "/tracking", reason: "home.DRIVER_ASSIGNED effect", rideId, userId: user?.id ?? null });
-      rideLog("HOME_NAVIGATE_TO_TRACKING", { rideId, userId: user?.id ?? null });
       router.push("/tracking");
     }
   }, [rideStatus, rideId, user, pathname]);
+
+  const snapPoints = useMemo(() => ["20%", "78%", "92%"], []);
+  const avatarInitial = user?.full_name?.[0]?.toUpperCase() ?? "U";
+
+  const mapAvailable = !!(location || pickup || destination);
 
   const world = useMemo(
     () => (
       <View style={styles.screen}>
         <FlowParallax progress={sheetIndex} factor={flowLayers.map} style={styles.mapLayer}>
-          {location ? (
-            <RideMap location={location} destinationCoords={destinationCoords} routePath={estimate?.path} />
+          {mapAvailable ? (
+            <RideMap location={effectivePickupCoords ?? { latitude: 0, longitude: 0 }} destinationCoords={destinationCoords} routePath={estimate?.path} />
           ) : (
             <View style={styles.mapPlaceholder}>
               {loadingLocation ? (
@@ -204,17 +229,17 @@ export function RiderHomeScreen() {
                 <Text style={styles.mapPlaceholderIcon}>📍</Text>
               )}
               <Text style={styles.mapPlaceholderText}>
-                {loadingLocation ? "Finding your pickup point…" : "Location unavailable. Make sure location services are on."}
+                {loadingLocation
+                  ? "Finding your pickup point…"
+                  : permissionDenied
+                  ? "Location unavailable. You can still search or move the map to pick a spot."
+                  : "Pick a location to start."}
               </Text>
             </View>
           )}
         </FlowParallax>
 
-        <FlowParallax
-          progress={sheetIndex}
-          factor={flowLayers.controls}
-          style={[styles.avatarWrap, { top: insets.top + 16, left: 20 }]}
-        >
+        <FlowParallax progress={sheetIndex} factor={flowLayers.controls} style={[styles.avatarWrap, { top: insets.top + 16, left: 20 }]}>
           <PressableScale scaleTo={0.96} onPress={presentProfile}>
             <View style={styles.avatarCircle}>
               <Text style={styles.avatarInitial}>{avatarInitial}</Text>
@@ -222,14 +247,14 @@ export function RiderHomeScreen() {
           </PressableScale>
         </FlowParallax>
 
-        <FlowParallax
-          progress={sheetIndex}
-          factor={flowLayers.controls}
-          style={[styles.locationButtonWrap, { top: insets.top + 80 }]}
-        >
-          <Pressable style={styles.locationButton}>
+        <FlowParallax progress={sheetIndex} factor={flowLayers.controls} style={[styles.locationButtonWrap, { top: insets.top + 80 }]}>
+          <PressableScale
+            scaleTo={0.96}
+            onPress={() => handleOpenLocationSelect("pickup")}
+            style={styles.locationButton}
+          >
             <Text style={styles.locationIcon}>📍</Text>
-          </Pressable>
+          </PressableScale>
         </FlowParallax>
 
         <BottomSheet
@@ -244,10 +269,11 @@ export function RiderHomeScreen() {
           enablePanDownToClose={false}
           enableDynamicSizing={false}
           overDragResistanceFactor={0.1}
+          keyboardBehavior="interactive"
         >
           <BottomSheetScrollView contentContainerStyle={styles.sheetScroll}>
             <BottomSheetContent
-              onSelectDestination={handleSelectDestination}
+              onOpenLocationSelect={handleOpenLocationSelect}
               onRequestRide={handleRequestRide}
               onCancelRide={handleCancelRide}
             />
@@ -258,12 +284,14 @@ export function RiderHomeScreen() {
     [
       insets,
       sheetIndex,
-      location,
-      loadingLocation,
+      mapAvailable,
+      effectivePickupCoords,
       destinationCoords,
       estimate,
+      loadingLocation,
+      permissionDenied,
       avatarInitial,
-      handleSelectDestination,
+      handleOpenLocationSelect,
       handleRequestRide,
       handleCancelRide,
       snapPoints,
@@ -272,44 +300,18 @@ export function RiderHomeScreen() {
     ]
   );
 
-  const layer = useMemo(
-    () => <ProfileSurface onClose={dismissProfile} />,
-    [dismissProfile]
-  );
-
-  if (permissionDenied) {
-    return (
-      <FlowView>
-        <View style={[styles.centered, { paddingHorizontal: 28 }]}>
-          <Text style={styles.loadingTitle}>Location access is needed</Text>
-          <Text style={styles.loadingSubtitle}>
-            Allow location permission to search destinations, estimate routes, and start the rider flow from home.
-          </Text>
-        </View>
-      </FlowView>
-    );
-  }
+  const layer = useMemo(() => <ProfileSurface onClose={dismissProfile} />, [dismissProfile]);
 
   return (
     <FlowView>
-      <FlowSurface
-        open={surfaceOpen}
-        visible={surfaceVisible}
-        world={world}
-        layer={layer}
-      />
+      <FlowSurface open={surfaceOpen} visible={surfaceVisible} world={world} layer={layer} />
     </FlowView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-  },
-  mapLayer: {
-    flex: 1,
-  },
+  screen: { flex: 1, backgroundColor: "#FFFFFF" },
+  mapLayer: { flex: 1 },
   mapPlaceholder: {
     flex: 1,
     backgroundColor: "#F7F7F7",
@@ -317,9 +319,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
-  mapPlaceholderIcon: {
-    fontSize: 24,
-  },
+  mapPlaceholderIcon: { fontSize: 24 },
   mapPlaceholderText: {
     color: "#6B7280",
     fontSize: 14,
@@ -327,29 +327,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     paddingHorizontal: 28,
   },
-  centered: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingTitle: {
-    color: "#111111",
-    fontSize: 28,
-    fontFamily: "GeneralSans-Bold",
-    textAlign: "center",
-  },
-  loadingSubtitle: {
-    color: "#6B7280",
-    fontSize: 14,
-    fontFamily: "GeneralSans-Regular",
-    textAlign: "center",
-    marginTop: 8,
-  },
-  avatarWrap: {
-    position: "absolute",
-    zIndex: 10,
-  },
+  avatarWrap: { position: "absolute", zIndex: 10 },
   avatarCircle: {
     width: 40,
     height: 40,
@@ -358,17 +336,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarInitial: {
-    fontSize: 16,
-    fontFamily: "GeneralSans-Bold",
-    color: "#111111",
-  },
-  locationButtonWrap: {
-    position: "absolute",
-    right: 16,
-    gap: 12,
-    zIndex: 10,
-  },
+  avatarInitial: { fontSize: 16, fontFamily: "GeneralSans-Bold", color: "#111111" },
+  locationButtonWrap: { position: "absolute", right: 16, gap: 12, zIndex: 10 },
   locationButton: {
     width: 44,
     height: 44,
@@ -381,13 +350,8 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 4,
   },
-  locationIcon: {
-    fontSize: 18,
-  },
-  sheetContainer: {
-    marginHorizontal: 12,
-    marginBottom: 16,
-  },
+  locationIcon: { fontSize: 18 },
+  sheetContainer: { marginHorizontal: 12, marginBottom: 16 },
   sheetBackground: {
     backgroundColor: "#FFFFFF",
     borderRadius: 32,
@@ -397,7 +361,5 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -4 },
     elevation: 8,
   },
-  sheetScroll: {
-    paddingBottom: 40,
-  },
+  sheetScroll: { paddingBottom: 40 },
 });

@@ -18,13 +18,18 @@ function decodeEwkbPoint(hex: string): Location | null {
 }
 
 function transformRide(raw: any): Ride {
-  const coords = (loc: any): Location | null => {
-    if (typeof loc === 'string') return decodeEwkbPoint(loc);
+  const coords = (loc: any, address?: string | null): Location | null => {
+    const withAddress = (point: Location): Location =>
+      address ? { ...point, address } : point;
+    if (typeof loc === 'string') {
+      const point = decodeEwkbPoint(loc);
+      return point ? withAddress(point) : null;
+    }
     if (loc?.coordinates?.[1] != null && loc?.coordinates?.[0] != null) {
-      return { latitude: loc.coordinates[1], longitude: loc.coordinates[0] };
+      return withAddress({ latitude: loc.coordinates[1], longitude: loc.coordinates[0] });
     }
     if (loc?.latitude != null && loc?.longitude != null) {
-      return { latitude: loc.latitude, longitude: loc.longitude };
+      return withAddress({ latitude: loc.latitude, longitude: loc.longitude });
     }
     return null; // explicit invalid/missing — caller must handle, never {0,0}
   };
@@ -34,8 +39,10 @@ function transformRide(raw: any): Ride {
     rider_id: raw.rider_id,
     driver_id: raw.driver_id ?? null,
     status: raw.status as RideStatus,
-    pickup_location: coords(raw.pickup_location),
-    drop_location: coords(raw.drop_location),
+    pickup_location: coords(raw.pickup_location, raw.pickup_address),
+    drop_location: coords(raw.drop_location, raw.drop_address),
+    pickup_address: raw.pickup_address ?? null,
+    drop_address: raw.drop_address ?? null,
     fare: Number(raw.fare),
     distance: Number(raw.distance),
     duration: Number(raw.duration),
@@ -46,7 +53,7 @@ function transformRide(raw: any): Ride {
 
 export const rideAPI = {
   acceptRide: async (rideId: string): Promise<Ride> => {
-    const raw = await api.post<any>(`/rides/${rideId}/accept`);
+    const raw = await api.post<any>(`/rides/${rideId}/accept`, {});
     return transformRide(raw);
   },
 

@@ -1,99 +1,120 @@
 import * as Location from "expo-location";
 import { create } from "zustand";
-import type { Coordinates, RideEstimate, RideOption, SearchResult } from "../components/home/types";
+import type {
+  Coordinates,
+  RideEstimate,
+  RideOption,
+  SelectedLocation,
+} from "../components/home/types";
 import { rideOptions } from "../components/ride/ride-config";
 
 // Idempotency guard so the permission/GPS chain runs exactly once per app
 // launch no matter how many effects request it (root layout + home screen).
 let locationBootstrapStarted = false;
 
-interface HomeState {
-  sheetIndex: number;
-  setSheetIndex: (index: number) => void;
+export type PassengerMode = "self" | "other";
 
+export type Passenger = {
+  name: string;
+  phone: string;
+};
+
+interface HomeState {
+  // Device GPS — deliberately distinct from a chosen pickup. The ride uses the
+  // selected pickup, never this value directly once a pickup has been chosen.
   location: Coordinates | null;
   permissionDenied: boolean;
   loadingLocation: boolean;
   isRefreshingLocation: boolean;
 
-  query: string;
-  results: SearchResult[];
-  isSearching: boolean;
+  sheetIndex: number;
+  setSheetIndex: (index: number) => void;
 
-  selectedDestination: SearchResult | null;
+  // First-class, independently selectable endpoints.
+  pickup: SelectedLocation | null;
+  destination: SelectedLocation | null;
+  setPickup: (pickup: SelectedLocation | null) => void;
+  setDestination: (destination: SelectedLocation | null) => void;
 
+  // Route / fare estimate derived once both endpoints are valid.
   estimate: RideEstimate | null;
   loadingEstimate: boolean;
+  setEstimate: (estimate: RideEstimate | null) => void;
+  setLoadingEstimate: (loading: boolean) => void;
 
   selectedOption: RideOption;
+  setSelectedOption: (option: RideOption) => void;
 
-  searchMode: "destination" | "pickup";
-  pickupQuery: string;
-  pickupResults: SearchResult[];
-  isSearchingPickup: boolean;
-  selectedPickup: SearchResult | null;
+  // "Book for someone else" support.
+  passengerMode: PassengerMode;
+  passenger: Passenger | null;
+  setPassengerMode: (mode: PassengerMode) => void;
+  setPassenger: (passenger: Passenger | null) => void;
 
+  // Location bootstrap (GPS only).
   setLocation: (location: Coordinates | null) => void;
   setPermissionDenied: (denied: boolean) => void;
   setLoadingLocation: (loading: boolean) => void;
   setIsRefreshingLocation: (refreshing: boolean) => void;
-  setQuery: (query: string) => void;
-  setResults: (results: SearchResult[]) => void;
-  setIsSearching: (searching: boolean) => void;
-  setSelectedDestination: (dest: SearchResult | null) => void;
-  setEstimate: (estimate: RideEstimate | null) => void;
-  setLoadingEstimate: (loading: boolean) => void;
-  setSelectedOption: (option: RideOption) => void;
   bootstrapLocation: () => Promise<void>;
-  resetDestination: () => void;
-  setSearchMode: (mode: "destination" | "pickup") => void;
-  setPickupQuery: (query: string) => void;
-  setPickupResults: (results: SearchResult[]) => void;
-  setIsSearchingPickup: (searching: boolean) => void;
-  setSelectedPickup: (pickup: SearchResult | null) => void;
+
+  // Invalidate the active route/estimate (e.g. when an endpoint changes).
+  clearEstimate: () => void;
+  clearDestination: () => void;
+  resetSelection: () => void;
 }
 
 export const useHomeStore = create<HomeState>((set, get) => ({
-  sheetIndex: 0,
-  setSheetIndex: (index) => set({ sheetIndex: index }),
-
   location: null,
   permissionDenied: false,
   loadingLocation: true,
   isRefreshingLocation: false,
 
-  query: "",
-  results: [],
-  isSearching: false,
+  sheetIndex: 0,
+  setSheetIndex: (index) => set({ sheetIndex: index }),
 
-  selectedDestination: null,
+  pickup: null,
+  destination: null,
+  setPickup: (pickup) => {
+    const prev = get().pickup;
+    // Changing the pickup invalidates any prior route/estimate.
+    if (!prev || prev.coordinates.latitude !== pickup?.coordinates.latitude || prev.coordinates.longitude !== pickup?.coordinates.longitude) {
+      set({ pickup, estimate: null });
+    } else {
+      set({ pickup });
+    }
+  },
+  setDestination: (destination) => {
+    const prev = get().destination;
+    if (
+      !prev ||
+      prev.coordinates.latitude !== destination?.coordinates.latitude ||
+      prev.coordinates.longitude !== destination?.coordinates.longitude
+    ) {
+      set({ destination, estimate: null });
+    } else {
+      set({ destination });
+    }
+  },
 
   estimate: null,
   loadingEstimate: false,
+  setEstimate: (estimate) => set({ estimate }),
+  setLoadingEstimate: (loading) => set({ loadingEstimate: loading }),
 
   selectedOption: rideOptions[0],
+  setSelectedOption: (option) => set({ selectedOption: option }),
 
-  searchMode: "destination",
-  pickupQuery: "",
-  pickupResults: [],
-  isSearchingPickup: false,
-  selectedPickup: null,
+  passengerMode: "self",
+  passenger: null,
+  setPassengerMode: (mode) => set({ passengerMode: mode, passenger: mode === "self" ? null : get().passenger }),
+  setPassenger: (passenger) => set({ passenger }),
 
   setLocation: (location) => set({ location }),
   setPermissionDenied: (denied) => set({ permissionDenied: denied }),
   setLoadingLocation: (loading) => set({ loadingLocation: loading }),
   setIsRefreshingLocation: (refreshing) => set({ isRefreshingLocation: refreshing }),
-  setQuery: (query) => set({ query }),
-  setResults: (results) => set({ results }),
-  setIsSearching: (searching) => set({ isSearching: searching }),
-  setSelectedDestination: (dest) => set({ selectedDestination: dest }),
-  setEstimate: (estimate) => set({ estimate }),
-  setLoadingEstimate: (loading) => set({ loadingEstimate: loading }),
-  setSelectedOption: (option) => set({ selectedOption: option }),
 
-  // Extracted verbatim from the rider home screen's mount-time loader so the
-  // permission + GPS chain can start while auth restoration is still in
-  // flight, instead of serializing behind it. Runs at most once per launch.
   bootstrapLocation: async () => {
     if (locationBootstrapStarted) return;
     locationBootstrapStarted = true;
@@ -136,10 +157,7 @@ export const useHomeStore = create<HomeState>((set, get) => ({
     }
   },
 
-  resetDestination: () => set({ selectedDestination: null, estimate: null, query: "" }),
-  setSearchMode: (mode) => set({ searchMode: mode }),
-  setPickupQuery: (query) => set({ pickupQuery: query }),
-  setPickupResults: (results) => set({ pickupResults: results }),
-  setIsSearchingPickup: (searching) => set({ isSearchingPickup: searching }),
-  setSelectedPickup: (pickup) => set({ selectedPickup: pickup }),
+  clearEstimate: () => set({ estimate: null }),
+  clearDestination: () => set({ destination: null, estimate: null }),
+  resetSelection: () => set({ pickup: null, destination: null, estimate: null }),
 }));

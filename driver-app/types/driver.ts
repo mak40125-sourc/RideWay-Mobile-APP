@@ -24,11 +24,5 @@ export interface DriverLocation {
   longitude: number;
   accuracy: number;
   timestamp: number;
-}
-
-export interface DriverLocation {
-  latitude: number;
-  longitude: number;
-  accuracy: number;
-  timestamp: number;
+  heading?: number;
 }

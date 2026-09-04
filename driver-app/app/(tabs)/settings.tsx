@@ -1,6 +1,10 @@
+import { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../contexts/AuthContext';
+import { useDriverStore } from '../../store/driverStore';
+import { driverAPI } from '../../services/driverAPI';
 import { colors, spacing, borderRadius, fontSize, fontWeight } from '../../constants/theme';
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -40,6 +44,21 @@ const SETTINGS_SECTIONS: { section: string; items: SettingsItem[] }[] = [
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { user, authUser } = useAuth();
+  const { driver, setDriver } = useDriverStore();
+
+  useEffect(() => {
+    if (!authUser || driver) return;
+    let mounted = true;
+    driverAPI.getMyProfile()
+      .then((profile) => {
+        if (mounted) setDriver(profile);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, [authUser, driver, setDriver]);
 
   const handleItemPress = (item: SettingsItem) => {
     if (item.route) {
@@ -50,6 +69,48 @@ export default function SettingsScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Settings</Text>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Driver Details</Text>
+        <View style={styles.driverCard}>
+          <View style={styles.driverRow}>
+            <Ionicons name="person-outline" size={18} color={colors.textMuted} style={styles.driverIcon} />
+            <Text style={styles.driverLabel}>Name</Text>
+            <Text style={styles.driverValue}>{user?.full_name || '—'}</Text>
+          </View>
+          <View style={styles.driverRow}>
+            <Ionicons name="call-outline" size={18} color={colors.textMuted} style={styles.driverIcon} />
+            <Text style={styles.driverLabel}>Phone</Text>
+            <Text style={styles.driverValue}>{user?.phone || '—'}</Text>
+          </View>
+          <View style={styles.driverRow}>
+            <Ionicons name="car-outline" size={18} color={colors.textMuted} style={styles.driverIcon} />
+            <Text style={styles.driverLabel}>Vehicle Type</Text>
+            <Text style={styles.driverValue}>
+              {driver?.vehicle_type ? driver.vehicle_type.charAt(0).toUpperCase() + driver.vehicle_type.slice(1) : '—'}
+            </Text>
+          </View>
+          <View style={styles.driverRow}>
+            <Ionicons name="car-sport-outline" size={18} color={colors.textMuted} style={styles.driverIcon} />
+            <Text style={styles.driverLabel}>Vehicle Number</Text>
+            <Text style={styles.driverValue}>{driver?.vehicle_number || '—'}</Text>
+          </View>
+          {driver?.vehicle_model ? (
+            <View style={styles.driverRow}>
+              <Ionicons name="construct-outline" size={18} color={colors.textMuted} style={styles.driverIcon} />
+              <Text style={styles.driverLabel}>Model</Text>
+              <Text style={styles.driverValue}>{driver.vehicle_model}</Text>
+            </View>
+          ) : null}
+          {driver?.vehicle_color ? (
+            <View style={styles.driverRow}>
+              <Ionicons name="color-palette-outline" size={18} color={colors.textMuted} style={styles.driverIcon} />
+              <Text style={styles.driverLabel}>Color</Text>
+              <Text style={styles.driverValue}>{driver.vehicle_color}</Text>
+            </View>
+          ) : null}
+        </View>
+      </View>
 
       {SETTINGS_SECTIONS.map((section, sIndex) => (
         <View key={sIndex} style={styles.section}>
@@ -119,6 +180,32 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: fontSize.md,
     color: colors.text,
+    fontFamily: 'NeueMontreal-Regular',
+  },
+  driverCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+  },
+  driverRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+  },
+  driverIcon: {
+    marginRight: spacing.md,
+  },
+  driverLabel: {
+    width: 120,
+    fontSize: fontSize.md,
+    color: colors.textMuted,
+    fontFamily: 'NeueMontreal-Regular',
+  },
+  driverValue: {
+    flex: 1,
+    fontSize: fontSize.md,
+    color: colors.text,
+    textAlign: 'right',
     fontFamily: 'NeueMontreal-Regular',
   },
   version: {

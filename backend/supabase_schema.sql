@@ -9,7 +9,7 @@ DO $$ BEGIN
     CREATE TYPE ride_status AS ENUM ('IDLE', 'REQUESTED', 'SEARCHING_DRIVER', 'DRIVER_ASSIGNED', 'DRIVER_ARRIVING', 'RIDE_STARTED', 'RIDE_COMPLETED', 'CANCELLED');
     CREATE TYPE transaction_type AS ENUM ('credit', 'debit');
     CREATE TYPE payment_status AS ENUM ('pending', 'completed', 'failed', 'refunded');
-    CREATE TYPE kyc_status AS ENUM ('pending', 'in_review', 'verified', 'rejected');
+    CREATE TYPE kyc_status AS ENUM ('pending', 'in_review', 'verified', 'needs_correction', 'rejected');
     CREATE TYPE document_status AS ENUM ('pending', 'approved', 'rejected');
 EXCEPTION
     WHEN duplicate_object THEN null;
@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS public.drivers (
   is_online BOOLEAN DEFAULT false,
   kyc_status kyc_status DEFAULT 'pending',
   is_verified BOOLEAN DEFAULT false,
+  kyc_reviewed_by TEXT,
+  kyc_reviewed_at TIMESTAMPTZ,
   wallet_balance NUMERIC DEFAULT 0,
   location GEOGRAPHY(POINT, 4326),
   last_pings_at TIMESTAMPTZ DEFAULT NOW(),
@@ -68,6 +70,20 @@ CREATE TABLE IF NOT EXISTS public.driver_documents (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 5.2 KYC Review Audit History
+CREATE TABLE IF NOT EXISTS public.driver_kyc_reviews (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  driver_id UUID REFERENCES public.drivers(id) ON DELETE CASCADE,
+  reviewer TEXT,
+  action TEXT NOT NULL,
+  previous_status kyc_status,
+  new_status kyc_status,
+  reason TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_driver_kyc_reviews_driver ON public.driver_kyc_reviews(driver_id);
 
 -- 6. Rides Table
 -- Note: We use geography for pickup/drop for precise distance calculations

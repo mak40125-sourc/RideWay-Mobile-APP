@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
+import { supabase } from "../lib/supabase";
 import { rideLog, setDiagnosticNetwork } from "../utils/ride-request-diagnostics";
 
 const API_PATH = "/api/v1";
@@ -62,7 +63,23 @@ async function getHeaders(): Promise<Record<string, string>> {
   };
 
   try {
-    const token = await AsyncStorage.getItem(TOKEN_KEY);
+    // Single source of truth: the live Supabase session. supabase-js keeps it
+    // fresh (refreshing the access token before expiry), so the header always
+    // carries the current non-expired token. The AsyncStorage snapshot is a
+    // best-effort fallback only when no session is present yet.
+    let token: string | null = null;
+
+    try {
+      const { data } = await supabase.auth.getSession();
+      token = data.session?.access_token ?? null;
+    } catch {
+      token = null;
+    }
+
+    if (!token) {
+      token = await AsyncStorage.getItem(TOKEN_KEY);
+    }
+
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }

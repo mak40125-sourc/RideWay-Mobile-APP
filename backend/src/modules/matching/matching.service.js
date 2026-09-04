@@ -20,7 +20,7 @@ const normalizeCoords = (point) => {
   return { lat, lng, address: point.address || '' };
 };
 
-const createRideRequest = async (riderId, pickup, dropoff, fare, distance, duration, vehicleType) => {
+const createRideRequest = async (riderId, pickup, dropoff, fare, distance, duration, vehicleType, passenger) => {
   const correlationId = currentCorrelationId();
   const rideId = crypto.randomUUID();
   track(correlationId, { rideId });
@@ -29,6 +29,13 @@ const createRideRequest = async (riderId, pickup, dropoff, fare, distance, durat
   // `{ lat, lng }` or `{ latitude, longitude }` from any client.
   const pickupCoords = normalizeCoords(pickup);
   const dropoffCoords = normalizeCoords(dropoff);
+
+  const passengerName = passenger?.passengerName || null;
+  const passengerPhone = passenger?.passengerPhone || null;
+
+  if (passengerName || passengerPhone) {
+    await matchingRepository.setRidePassenger(rideId, passengerName, passengerPhone).catch(() => {});
+  }
 
   stage(correlationId, '2', 'ride_created', { rideId, riderId, pickup: pickupCoords, dropoff: dropoffCoords, vehicleType });
 
@@ -44,6 +51,8 @@ const createRideRequest = async (riderId, pickup, dropoff, fare, distance, durat
     distance,
     duration,
     vehicleType,
+    passengerName,
+    passengerPhone,
   });
   stage(correlationId, '3', 'ride_persisted', { rideId, riderId });
 
@@ -75,6 +84,8 @@ const createRideRequest = async (riderId, pickup, dropoff, fare, distance, durat
       fare,
       distance,
       duration,
+      passengerName,
+      passengerPhone,
     });
   } else {
     logger.warn({
@@ -90,7 +101,7 @@ const createRideRequest = async (riderId, pickup, dropoff, fare, distance, durat
     });
   }
 
-  return { rideId, candidateCount };
+  return { rideId, candidateCount, passengerName, passengerPhone };
 };
 
 const acceptRide = (rideId, driverId) => persistAcceptance(rideId, driverId);

@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useDriverStore } from '../../store/driverStore';
 import { useRideStore } from '../../store/rideStore';
-import { colors, spacing, borderRadius, fontSize, fontWeight } from '../../constants/theme';
+import { colors, spacing, borderRadius, fontSize, fontFamily } from '../../constants/theme';
 
 export default function RideCompletedScreen() {
   const router = useRouter();
@@ -15,6 +15,11 @@ export default function RideCompletedScreen() {
   const earnings = fare;
 
   const handleDone = () => {
+    const ts = new Date().toISOString();
+     
+    console.log(`[RIDEWAY-DIAG] DRIVER_RIDE_STATE_UPDATED ts=${ts} rideId=${current_ride?.id ?? 'null'} status=RIDE_COMPLETED->ONLINE_IDLE`);
+     
+    console.log(`[RIDEWAY-DIAG] RIDER_ACTIVE_RIDE_CLEARED ts=${ts} rideId=${current_ride?.id ?? 'null'} reason=driver_done`);
     setStatus('ONLINE_IDLE');
     setEarningsToday(earnings_today + earnings);
     clearRide();
@@ -29,7 +34,7 @@ export default function RideCompletedScreen() {
         </View>
 
         <Text style={styles.title}>Ride Completed!</Text>
-        <Text style={styles.subtitle}>Great job! Here's your summary</Text>
+        <Text style={styles.subtitle}>Great job! Here&apos;s your summary</Text>
 
         <View style={styles.summaryCard}>
           <View style={styles.row}>
@@ -76,13 +81,14 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: fontSize.xxl,
-    fontWeight: fontWeight.bold,
+    fontFamily: fontFamily.bold,
     color: colors.text,
     textAlign: 'center',
     marginBottom: spacing.sm,
   },
   subtitle: {
     fontSize: fontSize.md,
+    fontFamily: fontFamily.regular,
     color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: spacing.xl,
@@ -100,16 +106,17 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: fontSize.md,
+    fontFamily: fontFamily.regular,
     color: colors.textSecondary,
   },
   value: {
     fontSize: fontSize.md,
-    fontWeight: fontWeight.medium,
+    fontFamily: fontFamily.medium,
     color: colors.text,
   },
   deduction: {
     fontSize: fontSize.md,
-    fontWeight: fontWeight.medium,
+    fontFamily: fontFamily.medium,
     color: colors.error,
   },
   totalRow: {
@@ -120,12 +127,12 @@ const styles = StyleSheet.create({
   },
   totalLabel: {
     fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold,
+    fontFamily: fontFamily.semibold,
     color: colors.text,
   },
   totalValue: {
     fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
+    fontFamily: fontFamily.bold,
     color: colors.success,
   },
   button: {
@@ -136,7 +143,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold,
+    fontFamily: fontFamily.semibold,
     color: colors.background,
   },
 });

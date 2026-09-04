@@ -3,6 +3,7 @@ const cors = require('cors');
 const { driverRoutes } = require('./modules/driver');
 const { rideRoutes } = require('./modules/ride');
 const { walletRoutes } = require('./modules/wallet');
+const { dashboardRoutes } = require('./modules/dashboard');
 const { correlationMiddleware } = require('./core/middleware/correlation.middleware');
 const { stage } = require('./core/logger/logger');
 
@@ -25,6 +26,7 @@ app.use((req, res, next) => {
 app.use('/api/v1/drivers', driverRoutes);
 app.use('/api/v1/rides', rideRoutes);
 app.use('/api/v1/wallet', walletRoutes);
+app.use('/api/v1/dashboard', dashboardRoutes);
 
 // Simple health check
 app.get('/health', (req, res) => res.send('RideWay Backend is Online'));

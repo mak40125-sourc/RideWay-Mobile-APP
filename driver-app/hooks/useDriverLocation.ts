@@ -49,11 +49,16 @@ export const useDriverLocation = () => {
           distanceInterval: 5,
         },
         (location) => {
+          const heading =
+            location.coords.heading != null && location.coords.heading >= 0
+              ? location.coords.heading
+              : undefined;
           setLocation({
             latitude: location.coords.latitude,
             longitude: location.coords.longitude,
             accuracy: location.coords.accuracy || 0,
             timestamp: Date.now(),
+            heading,
           });
           syncLocation(location.coords);
         }

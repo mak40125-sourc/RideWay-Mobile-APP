@@ -2,7 +2,7 @@ import { useEffect } from "react";
 
 import { useAuth } from "../context/auth-context";
 import { useRideStore, type RideStatus } from "../context/ride-store";
-import { decodeRideLocation, getRiderActiveRide } from "../services/ride.service";
+import { decodeRideLocation, getRide, getRiderActiveRide } from "../services/ride.service";
 import { rideLog } from "../utils/ride-request-diagnostics";
 
 const ACTIVE_RIDE_POLL_MS = 5000;
@@ -43,10 +43,38 @@ export function useActiveRideDiscovery(enabled = true) {
 
     const pollStatus = async () => {
       try {
+        const ts = new Date().toISOString();
+        // eslint-disable-next-line no-console
+        console.log(`[RIDEWAY-DIAG] RIDER_POLL ts=${ts} rideId=${rideId ?? 'null'} userId=${user.id} status=${status} endpoint=GET:/rides/rider/:riderId/active`);
         const activeRide = await getRiderActiveRide(user.id);
         if (cancelled || !activeRide) {
           if (!cancelled) {
             rideLog("DISCOVERY_NO_ACTIVE_RIDE", { rideId, userId: user.id, status });
+            // eslint-disable-next-line no-console
+            console.log(`[RIDEWAY-DIAG] RIDER_POLL_NO_ACTIVE ts=${new Date().toISOString()} rideId=${rideId ?? 'null'} status=${status} -> attempting recovery fetch`);
+            // Recovery: if we have a local rideId but active poll returned null (RIDE_COMPLETED filtered),
+            // fetch the specific ride to detect completion missed due to disconnect.
+            if (rideId) {
+              try {
+                const direct = await getRide(rideId);
+                if (direct && direct.status === "RIDE_COMPLETED") {
+                  // eslint-disable-next-line no-console
+                  console.log(`[RIDEWAY-DIAG] RIDER_RIDE_STATE_UPDATED ts=${new Date().toISOString()} rideId=${rideId} from=${status} to=RIDE_COMPLETED source=recovery_poll`);
+                  rideLog("RIDER_SOCKET_RIDE_EVENT", { event: "ride:status_changed", rideId, status: "RIDE_COMPLETED", source: "recovery_poll" });
+                  rideLog("RIDER_RIDE_STATE_UPDATED", { rideId, from: status, to: "RIDE_COMPLETED", source: "recovery_poll" });
+                  useRideStore.getState().setStatus("RIDE_COMPLETED");
+                  // eslint-disable-next-line no-console
+                  console.log(`[RIDEWAY-DIAG] RIDER_ACTIVE_RIDE_CLEARED ts=${new Date().toISOString()} rideId=${rideId} source=completion via=recovery_poll`);
+                  return;
+                }
+              } catch {
+                // ignore recovery fetch errors
+              }
+            }
+            // eslint-disable-next-line no-console
+            console.log(`[RIDEWAY-DIAG] RIDER_RIDE_STATE_UPDATED ts=${new Date().toISOString()} rideId=${rideId ?? 'null'} activeRide=null status=${status} -> no_hydration (RIDE_COMPLETED filtered)`);
+            // eslint-disable-next-line no-console
+            console.log(`[RIDEWAY-DIAG] RIDER_SOCKET_RIDE_EVENT ts=${new Date().toISOString()} event=NONE rideId=${rideId ?? 'null'} note=no_socket_on_completion`);
           }
           return;
         }
@@ -81,6 +109,10 @@ export function useActiveRideDiscovery(enabled = true) {
           status,
           activeRideStatus: activeRide.status,
         });
+        // eslint-disable-next-line no-console
+        console.log(`[RIDEWAY-DIAG] RIDER_SOCKET_RIDE_EVENT ts=${new Date().toISOString()} event=poll activeRideStatus=${activeRide.status} rideId=${activeRide.id}`);
+        // eslint-disable-next-line no-console
+        console.log(`[RIDEWAY-DIAG] RIDER_RIDE_STATE_UPDATED ts=${new Date().toISOString()} rideId=${activeRide.id} from=${status} to=${activeRide.status}`);
 
         hydrateActiveRide({
           rideId: activeRide.id,

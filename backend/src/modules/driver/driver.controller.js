@@ -26,7 +26,9 @@ exports.setOnline = async (req, res) => {
 
     res.status(200).json({ message: `Driver is now ${isOnline ? 'online' : 'offline'}` });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    // Validation failures (missing/invalid authoritative profile) surface as
+    // 400; everything else remains an internal error.
+    res.status(error.statusCode || 500).json({ error: error.message });
   }
 };
 

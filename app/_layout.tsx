@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from "../context/auth-context";
 import { useHomeStore } from "../store/homeStore";
 import { LoginScreen } from "../components/auth/login-screen";
 import { ProfileCreationScreen } from "../components/profile/profile-creation-screen";
+import { useRiderRideSocket } from "../hooks/useRiderRideSocket";
 import { rideLog, setDiagnosticScreen } from "../utils/ride-request-diagnostics";
 
 SplashScreen.preventAutoHideAsync();
@@ -42,6 +43,8 @@ export default function RootLayout() {
 function RootNavigator() {
   const { loading, isAuthenticated, user, refreshProfile } = useAuth();
   const pathname = usePathname();
+  // Rider realtime completion — joins rider:<userId> room, listens for ride:status_changed
+  useRiderRideSocket(!!user);
 
   useEffect(() => {
     // Start the permission/GPS chain while auth restoration is still in

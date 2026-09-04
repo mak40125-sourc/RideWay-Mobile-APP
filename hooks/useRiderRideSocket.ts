@@ -1,0 +1,114 @@
+import { useEffect, useRef } from "react";
+import { io, Socket } from "socket.io-client";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants";
+import { Platform } from "react-native";
+import { useRideStore } from "../context/ride-store";
+import { rideLog } from "../utils/ride-request-diagnostics";
+import { supabase } from "../lib/supabase";
+
+function getWebSocketUrl(): string {
+  const configured = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+  const base = configured
+    ? configured.replace(/\/$/, "")
+    : (() => {
+        const host =
+          (Constants.expoConfig?.hostUri as string | undefined)?.split(":")[0] ||
+          ((Constants as unknown as { expoGoConfig?: { debuggerHost?: string } }).expoGoConfig?.debuggerHost?.split(":")[0] ?? null) ||
+          null;
+        if (host) return `http://${host}:3000/api/v1`;
+        const fb = Platform.OS === "android" ? "10.0.2.2" : "localhost";
+        return `http://${fb}:3000/api/v1`;
+      })();
+  return base.replace(/\/api\/v1$/, "").replace(/^http/, "ws");
+}
+
+export function useRiderRideSocket(enabled = true) {
+  const socketRef = useRef<Socket | null>(null);
+
+  useEffect(() => {
+    if (!enabled) return;
+    let mounted = true;
+
+    const connect = async () => {
+      let token: string | null = null;
+      try {
+        const { data } = await supabase.auth.getSession();
+        token = data.session?.access_token ?? null;
+      } catch {}
+      if (!token) token = await AsyncStorage.getItem("supabase_token");
+      if (!token) {
+        // eslint-disable-next-line no-console
+        console.log(`[RIDEWAY-DIAG] RIDER_SOCKET_NO_TOKEN ts=${new Date().toISOString()}`);
+        return;
+      }
+      const wsUrl = getWebSocketUrl();
+      // eslint-disable-next-line no-console
+      console.log(`[RIDEWAY-DIAG] RIDER_SOCKET_CONNECTING ts=${new Date().toISOString()} url=${wsUrl}`);
+      rideLog("RIDER_SOCKET_CONNECTING", { url: wsUrl });
+      const socket = io(wsUrl, {
+        auth: { token },
+        transports: ["websocket"],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: Infinity,
+      });
+
+      socket.on("connect", () => {
+        if (!mounted) return;
+        // eslint-disable-next-line no-console
+        console.log(`[RIDEWAY-DIAG] RIDER_SOCKET_CONNECTED ts=${new Date().toISOString()} sid=${socket.id}`);
+        rideLog("RIDER_SOCKET_CONNECTED", { sid: socket.id });
+      });
+
+      socket.on("ride:status_changed", (payload: { rideId: string; status: string; ride?: unknown }) => {
+        const ts = new Date().toISOString();
+        // eslint-disable-next-line no-console
+        console.log(`[RIDEWAY-DIAG] RIDER_SOCKET_RIDE_EVENT ts=${ts} event=ride:status_changed rideId=${payload?.rideId} status=${payload?.status}`);
+        rideLog("RIDER_SOCKET_RIDE_EVENT", { event: "ride:status_changed", rideId: payload?.rideId, status: payload?.status });
+        const currentId = useRideStore.getState().rideId;
+        const currentStatus = useRideStore.getState().status;
+        if (payload?.rideId !== currentId) {
+          // eslint-disable-next-line no-console
+          console.log(`[RIDEWAY-DIAG] RIDER_SOCKET_RIDE_EVENT ts=${ts} ignored rideId mismatch current=${currentId} payload=${payload?.rideId}`);
+          return;
+        }
+        if (payload?.status === "RIDE_COMPLETED") {
+          // eslint-disable-next-line no-console
+          console.log(`[RIDEWAY-DIAG] RIDER_RIDE_STATE_UPDATED ts=${new Date().toISOString()} rideId=${payload.rideId} from=${currentStatus} to=RIDE_COMPLETED source=socket`);
+          rideLog("RIDER_RIDE_STATE_UPDATED", { rideId: payload.rideId, from: currentStatus, to: "RIDE_COMPLETED", source: "socket" });
+          useRideStore.getState().setStatus("RIDE_COMPLETED");
+        }
+      });
+
+      socket.on("disconnect", (reason) => {
+        // eslint-disable-next-line no-console
+        console.log(`[RIDEWAY-DIAG] RIDER_SOCKET_DISCONNECT ts=${new Date().toISOString()} reason=${reason}`);
+        rideLog("RIDER_SOCKET_DISCONNECT", { reason });
+      });
+
+      socket.on("connect_error", (err) => {
+        // eslint-disable-next-line no-console
+        console.log(`[RIDEWAY-DIAG] RIDER_SOCKET_ERROR ts=${new Date().toISOString()} msg=${err.message}`);
+        rideLog("RIDER_SOCKET_ERROR", { message: err.message });
+      });
+
+      socket.on("reconnect", () => {
+        // eslint-disable-next-line no-console
+        console.log(`[RIDEWAY-DIAG] RIDER_SOCKET_RECONNECT ts=${new Date().toISOString()} sid=${socket.id}`);
+        rideLog("RIDER_SOCKET_RECONNECT", { sid: socket.id });
+      });
+
+      socketRef.current = socket;
+    };
+
+    void connect();
+    return () => {
+      mounted = false;
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+    };
+  }, [enabled]);
+}

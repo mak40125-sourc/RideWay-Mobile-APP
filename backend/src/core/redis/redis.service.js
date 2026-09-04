@@ -35,6 +35,9 @@ const subscriber = createClient('subscriber');
 const RIDE_REQUEST_TTL = 120;
 
 const redisService = {
+  // Offer window shared with clients via the ride:request payload (expiresAt).
+  RIDE_REQUEST_TTL,
+
   // ── Driver Location ──────────────────────────────────────────────
   setDriverLocation: async (driverId, latitude, longitude) => {
     await client.geoadd('drivers:online', longitude, latitude, driverId);
@@ -89,8 +92,12 @@ const redisService = {
   },
 
   setDriverOffline: async (driverId) => {
-    await client.del(`driver:${driverId}`);
-    await client.zrem('drivers:online', driverId);
+    // One pipeline round trip: availability metadata and GEO membership are
+    // removed together so going offline can never leave half-deleted state.
+    const pipeline = client.pipeline();
+    pipeline.del(`driver:${driverId}`);
+    pipeline.zrem('drivers:online', driverId);
+    await pipeline.exec();
   },
 
   getDriver: async (driverId) => {
@@ -156,6 +163,22 @@ const redisService = {
       rideId,
       key,
     });
+  },
+
+  // Passenger identity for "book for someone else" rides. Stored in its own hash
+  // (long TTL) so it survives the short-lived ride:request buffer and is
+  // available to the driver for the whole ride without a DB schema change.
+  setRidePassenger: async (rideId, name, phone) => {
+    const key = `ride:passenger:${rideId}`;
+    await client.hset(key, { name: name || '', phone: phone || '' });
+    await client.expire(key, 24 * 60 * 60);
+  },
+
+  getRidePassenger: async (rideId) => {
+    const key = `ride:passenger:${rideId}`;
+    const data = await client.hgetall(key);
+    if (!data || Object.keys(data).length === 0) return null;
+    return { name: data.name || null, phone: data.phone || null };
   },
 
   // ── Driver Queue ─────────────────────────────────────────────────
@@ -259,6 +282,26 @@ const redisService = {
         }
       }
     });
+  },
+
+  // ── Dashboard: online driver aggregates ─────────────────────────
+  // Returns the set of online driver ids (members of the `drivers:online` GEO
+  // set). Returns null when Redis is unavailable so callers can fall back to the
+  // Supabase `is_online` column without crashing the dashboard read path.
+  getOnlineDriverIds: async () => {
+    try {
+      return await client.zrange('drivers:online', 0, -1)
+    } catch {
+      return null
+    }
+  },
+
+  countOnlineDrivers: async () => {
+    try {
+      return await client.zcard('drivers:online')
+    } catch {
+      return null
+    }
   },
 
   // ── Cleanup ──────────────────────────────────────────────────────

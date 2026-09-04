@@ -10,6 +10,10 @@ export type RideRequestPayload = {
   distance: number;
   duration: number;
   vehicleType: string;
+  // Optional passenger identity for rides booked for someone else. Omitted for
+  // a normal ride where the rider is also the passenger.
+  passengerName?: string;
+  passengerPhone?: string;
 };
 
 // PostgREST serializes PostGIS geography columns as EWKB hex strings
@@ -36,6 +40,10 @@ export type Ride = {
   status: string;
   created_at: string;
   updated_at: string;
+  // Passenger identity for rides booked on behalf of someone else. May be
+  // absent for normal rides or when the source backend predates this field.
+  passenger_name?: string | null;
+  passenger_phone?: string | null;
 };
 
 // EWKB 2D Point with SRID (25 bytes, little-endian):

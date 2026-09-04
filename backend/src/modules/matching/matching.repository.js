@@ -1,5 +1,6 @@
 const { supabaseAdmin } = require('../../core/database/supabase');
 const redisService = require('../../core/redis/redis.service');
+const driverRepository = require('../driver/driver.repository');
 
 // Matching persistence. The matching module's business logic
 // (matching.service.js) never accesses storage directly — all Supabase / Redis
@@ -12,6 +13,14 @@ exports.getRideRequest = (rideId) => redisService.getRideRequest(rideId);
 
 exports.deleteRideRequest = (rideId) => redisService.deleteRideRequest(rideId);
 
+// ── Redis: passenger identity (book-for-someone-else) ────────────
+// Persisted separately from the rides table (which has no passenger columns in
+// the current schema) so the driver can see the actual passenger for the whole
+// ride lifecycle without a DB migration.
+exports.setRidePassenger = (rideId, name, phone) => redisService.setRidePassenger(rideId, name, phone);
+
+exports.getRidePassenger = (rideId) => redisService.getRidePassenger(rideId);
+
 // ── Redis: driver availability ────────────────────────────────────
 exports.getNearbyDrivers = (latitude, longitude, radiusMeters) =>
   redisService.getNearbyDrivers(latitude, longitude, radiusMeters);
@@ -19,6 +28,13 @@ exports.getNearbyDrivers = (latitude, longitude, radiusMeters) =>
 // Single-driver hash snapshot (current availability metadata), used for
 // candidate-discovery diagnostics.
 exports.getDriver = (driverId) => redisService.getDriver(driverId);
+
+// Repair-at-read: restore a nearby driver's missing availability metadata from
+// the authoritative drivers row. Delegates to the driver module's existing
+// repair routine (UUID-guarded, failure-tolerant) so matching never duplicates
+// restoration logic. Callers bound this to actual GEO candidates only.
+exports.repairDriverMetadata = (driverId) =>
+  driverRepository.ensureDriverHashMetadata(driverId);
 
 // ── Redis: offer queue ────────────────────────────────────────────
 exports.addDriversToQueue = (rideId, driverIds) => redisService.addDriversToQueue(rideId, driverIds);

@@ -4,10 +4,12 @@ import { PressableScale } from "./flow/PressableScale";
 
 type Props = {
   label: string;
+  subtitle?: string;
+  icon?: string;
   onPress: () => void;
 };
 
-export function PickupCard({ label, onPress }: Props) {
+export function PickupCard({ label, subtitle, icon = "📍", onPress }: Props) {
   return (
     <PressableScale
       onPress={onPress}
@@ -32,7 +34,7 @@ export function PickupCard({ label, onPress }: Props) {
           justifyContent: "center",
         }}
       >
-        <Text style={{ fontSize: 14 }}>📍</Text>
+        <Text style={{ fontSize: 14 }}>{icon}</Text>
       </View>
       <View style={{ flex: 1 }}>
         <Text
@@ -53,7 +55,7 @@ export function PickupCard({ label, onPress }: Props) {
             marginTop: 1,
           }}
         >
-          Tap to change pickup
+          {subtitle ?? "Tap to change"}
         </Text>
       </View>
       <Text style={{ color: "#9CA3AF", fontSize: 12 }}>Edit</Text>

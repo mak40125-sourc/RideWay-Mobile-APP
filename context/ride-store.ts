@@ -64,6 +64,11 @@ export type Trip = {
   path: Coordinates[];
   pickupAddress?: string | null;
   dropAddress?: string | null;
+  // Passenger identity. For a normal ride both are the rider; for a ride booked
+  // for someone else these describe the actual passenger (see requestedBy below).
+  requestedBy?: string | null;
+  passengerName?: string | null;
+  passengerPhone?: string | null;
 };
 
 type RideState = {
@@ -87,6 +92,10 @@ type RideActions = {
     distance: number;
     duration: number;
     path: Coordinates[];
+    pickupAddress?: string | null;
+    dropAddress?: string | null;
+    passengerName?: string | null;
+    passengerPhone?: string | null;
   }) => void;
   setSelectedOption: (option: RideOption, fare: number) => void;
   requestRideAction: (userId: string, options?: { navigateToTracking?: boolean }) => Promise<void>;
@@ -103,6 +112,8 @@ type RideActions = {
     distance?: number | null;
     duration?: number | null;
     driverId?: string | null;
+    passengerName?: string | null;
+    passengerPhone?: string | null;
   }) => void;
   updateDriver: (info: Partial<DriverInfo>) => void;
   resetRide: () => void;
@@ -133,6 +144,10 @@ export const useRideStore = create<RideState & RideActions>((set, get) => ({
         distance: params.distance,
         duration: params.duration,
         path: params.path,
+        pickupAddress: params.pickupAddress ?? null,
+        dropAddress: params.dropAddress ?? null,
+        passengerName: params.passengerName ?? null,
+        passengerPhone: params.passengerPhone ?? null,
       },
       status: "IDLE",
       error: null,
@@ -160,7 +175,7 @@ export const useRideStore = create<RideState & RideActions>((set, get) => ({
       return;
     }
 
-    const { pickup, dropoff, option, fare, distance, duration, path } = state.trip;
+    const { pickup, dropoff, option, fare, distance, duration, path, passengerName, passengerPhone } = state.trip;
 
     rideLog("RIDE_REQUEST_STARTED", { userId, navigateToTracking, vehicleType: option.vehicleType ?? option.label.toLowerCase(), attempt, traceId });
     set({ requesting: true, status: "REQUESTING", error: null });
@@ -176,6 +191,8 @@ export const useRideStore = create<RideState & RideActions>((set, get) => ({
         distance,
         duration,
         vehicleType: option.vehicleType ?? option.label.toLowerCase(),
+        passengerName: passengerName ?? undefined,
+        passengerPhone: passengerPhone ?? undefined,
       }, { traceId, attempt });
 
       rideLog("RIDE_RESPONSE_RECEIVED", { userId, rideId: result.rideId, candidateCount: result.candidateCount, attempt, traceId });
@@ -230,6 +247,9 @@ export const useRideStore = create<RideState & RideActions>((set, get) => ({
 
   setStatus: (status) => {
     const prev = get().status;
+    const ts = new Date().toISOString();
+    // eslint-disable-next-line no-console
+    console.log(`[RIDEWAY-DIAG] RIDER_RIDE_STATE_UPDATED ts=${ts} rideId=${get().rideId ?? 'null'} from=${prev} to=${status}`);
     if (status === "IDLE" && (prev === "REQUESTING" || prev === "SEARCHING_DRIVER" || prev === "DRIVER_ASSIGNED")) {
       rideLog("STATE_RESET", { from: prev, to: "IDLE", reason: "setStatus", rideId: get().rideId });
     }
@@ -241,8 +261,12 @@ export const useRideStore = create<RideState & RideActions>((set, get) => ({
 
   setRideId: (id) => set({ rideId: id }),
 
-  hydrateActiveRide: (params) =>
-    set((state) => {
+  hydrateActiveRide: (params) => {
+    const ts = new Date().toISOString();
+    const prev = get().status;
+    // eslint-disable-next-line no-console
+    console.log(`[RIDEWAY-DIAG] RIDER_RIDE_STATE_UPDATED ts=${ts} rideId=${params.rideId} from=${prev} to=${params.status} pickup=${!!params.pickup} dropoff=${!!params.dropoff}`);
+    return set((state) => {
       const local = state.trip;
 
       let pickup: Coordinates | null = null;
@@ -265,6 +289,8 @@ export const useRideStore = create<RideState & RideActions>((set, get) => ({
               path: local?.path ?? [],
               pickupAddress: params.pickupAddress ?? null,
               dropAddress: params.dropAddress ?? null,
+              passengerName: params.passengerName ?? null,
+              passengerPhone: params.passengerPhone ?? null,
             }
           : state.trip;
 
@@ -276,7 +302,8 @@ export const useRideStore = create<RideState & RideActions>((set, get) => ({
         requesting: false,
         error: null,
       };
-    }),
+    });
+  },
 
   updateDriver: (info) =>
     set((state) => ({
@@ -285,6 +312,9 @@ export const useRideStore = create<RideState & RideActions>((set, get) => ({
 
   resetRide: () => {
     const prev = get().status;
+    const ts = new Date().toISOString();
+    // eslint-disable-next-line no-console
+    console.log(`[RIDEWAY-DIAG] RIDER_ACTIVE_RIDE_CLEARED ts=${ts} rideId=${get().rideId ?? 'null'} from=${prev} to=IDLE reason=resetRide`);
     rideLog("STATE_RESET", { from: prev, to: "IDLE", reason: "resetRide", rideId: get().rideId });
     rideLog("RIDE_RESET", { rideId: get().rideId });
     set({

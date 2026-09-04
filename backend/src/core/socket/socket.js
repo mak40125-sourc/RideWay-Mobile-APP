@@ -31,14 +31,18 @@ function initSocket(httpServer) {
   });
 
   io.on('connection', (socket) => {
-    const room = `driver:${socket.userId}`;
-    socket.join(room);
+    const driverRoom = `driver:${socket.userId}`;
+    const riderRoom = `rider:${socket.userId}`;
+    socket.join(driverRoom);
+    socket.join(riderRoom);
     logger.info({ type: 'socket', event: 'connected', userId: socket.userId, socketId: socket.id });
-    logger.info({ type: 'socket', event: 'room_joined', userId: socket.userId, socketId: socket.id, room });
+    logger.info({ type: 'socket', event: 'room_joined', userId: socket.userId, socketId: socket.id, room: driverRoom });
+    logger.info({ type: 'socket', event: 'room_joined', userId: socket.userId, socketId: socket.id, room: riderRoom });
 
     socket.on('disconnect', (reason) => {
       logger.info({ type: 'socket', event: 'disconnected', userId: socket.userId, socketId: socket.id, reason });
-      logger.info({ type: 'socket', event: 'room_left', userId: socket.userId, socketId: socket.id, room });
+      logger.info({ type: 'socket', event: 'room_left', userId: socket.userId, socketId: socket.id, room: driverRoom });
+      logger.info({ type: 'socket', event: 'room_left', userId: socket.userId, socketId: socket.id, room: riderRoom });
     });
   });
 

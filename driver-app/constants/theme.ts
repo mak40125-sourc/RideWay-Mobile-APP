@@ -12,6 +12,25 @@ export const colors = {
   accent: '#111111',
 };
 
+// Velos brand system — the approved palette for premium mobility surfaces.
+export const velosColors = {
+  green: '#0FA875',
+  navy: '#0F1D2A',
+  mutedText: '#6B7A84',
+  bgTint: '#F3F8F6',
+  mintSoft: '#E9F8F1',
+  white: '#FFFFFF',
+  borderSoft: '#DDE6E2',
+  dropOrange: '#F45118',
+};
+
+export const fontFamily = {
+  regular: 'GeneralSans-Regular',
+  medium: 'GeneralSans-Medium',
+  semibold: 'GeneralSans-Semibold',
+  bold: 'GeneralSans-Bold',
+};
+
 export const spacing = {
   xs: 4,
   sm: 8,

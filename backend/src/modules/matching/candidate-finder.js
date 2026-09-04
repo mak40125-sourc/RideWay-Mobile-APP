@@ -17,7 +17,58 @@ const findCandidates = async (pickup, vehicleType, rideId) => {
     nearbyDrivers.map((d) => matchingRepository.getDriver(d.user_id).catch(() => null))
   );
 
-  const candidates = nearbyDrivers.filter((d) => d.vehicle_type === vehicleType);
+  // Repair-at-read: a GEO member whose availability metadata is missing or
+  // incomplete (no hash / empty rideType → vehicle_type null) gets one bounded
+  // restore attempt from the authoritative drivers table BEFORE vehicle_type
+  // filtering. Only actual nearby GEO candidates are repaired — never the full
+  // driver population. Restoration failure excludes the driver safely instead
+  // of crashing discovery, and is logged for diagnosis.
+  const enriched = await Promise.all(
+    nearbyDrivers.map(async (d, i) => {
+      if (d.vehicle_type) {
+        return { ...d, hashExists: Boolean(hashes[i]), onlineSince: hashes[i]?.onlineSince || null };
+      }
+      try {
+        const restored = await matchingRepository.repairDriverMetadata(d.user_id);
+        if (restored && restored.rideType) {
+          logger.info({
+            type: 'matching',
+            event: 'candidate_metadata_repaired',
+            correlationId,
+            rideId,
+            driverId: d.user_id,
+            rideType: restored.rideType,
+          });
+          return {
+            ...d,
+            vehicle_type: restored.rideType,
+            status: restored.status || null,
+            hashExists: true,
+            onlineSince: restored.onlineSince || null,
+          };
+        }
+        logger.warn({
+          type: 'matching',
+          event: 'candidate_metadata_unrepaired',
+          correlationId,
+          rideId,
+          driverId: d.user_id,
+        });
+      } catch (err) {
+        logger.warn({
+          type: 'matching',
+          event: 'candidate_metadata_repair_failed',
+          correlationId,
+          rideId,
+          driverId: d.user_id,
+          error: err.message,
+        });
+      }
+      return { ...d, hashExists: Boolean(hashes[i]), onlineSince: hashes[i]?.onlineSince || null };
+    })
+  );
+
+  const candidates = enriched.filter((d) => d.vehicle_type === vehicleType);
 
   logger.info({
     type: 'matching',
@@ -29,15 +80,15 @@ const findCandidates = async (pickup, vehicleType, rideId) => {
     radiusMeters: NEARBY_DRIVER_RADIUS_METERS,
     requestedVehicleType: vehicleType,
     nearbyCount: nearbyDrivers.length,
-    nearbyDrivers: nearbyDrivers.map((d, i) => ({
+    nearbyDrivers: enriched.map((d) => ({
       driverId: d.user_id,
       distanceMeters: d.distance_meters,
       vehicleType: d.vehicle_type,
       status: d.status,
-      hashExists: Boolean(hashes[i]),
-      onlineSince: hashes[i]?.onlineSince || null,
+      hashExists: d.hashExists,
+      onlineSince: d.onlineSince,
     })),
-    excluded: nearbyDrivers
+    excluded: enriched
       .filter((d) => d.vehicle_type !== vehicleType)
       .map((d) => ({
         driverId: d.user_id,

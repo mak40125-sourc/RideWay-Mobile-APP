@@ -1,5 +1,4 @@
 import { TextInput, View } from "react-native";
-import { useHomeStore } from "../store/homeStore";
 
 type Props = {
   value?: string;
@@ -8,11 +7,8 @@ type Props = {
 };
 
 export function SearchBar({ value, onChangeText, placeholder }: Props) {
-  const storeQuery = useHomeStore((s) => s.query);
-  const setStoreQuery = useHomeStore((s) => s.setQuery);
-
-  const activeValue = value ?? storeQuery;
-  const handleChange = onChangeText ?? setStoreQuery;
+  const activeValue = value ?? "";
+  const handleChange = onChangeText ?? (() => {});
 
   return (
     <View

@@ -6,21 +6,40 @@ import type { Driver, DriverLocation } from '../types/driver';
 
 function getApiBaseUrl(): string {
   const configuredUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
-  if (configuredUrl) return configuredUrl.replace(/\/$/, '');
-
+  // eslint-disable-next-line no-console
+  console.log('[RIDEWAY-DIAG] driverAPI_URL_RESOLVE', JSON.stringify({
+    env: process.env.EXPO_PUBLIC_API_BASE_URL ?? null,
+    configuredUrl: configuredUrl || null,
+    hostUri: (Constants.expoConfig?.hostUri ?? (Constants as any).expoGoConfig?.debuggerHost ?? (Constants as any).manifest?.debuggerHost ?? null),
+    platform: Platform.OS,
+  }));
+  if (configuredUrl) {
+    const u = configuredUrl.replace(/\/$/, '');
+    // eslint-disable-next-line no-console
+    console.log('[RIDEWAY-DIAG] driverAPI_BASE_SOURCE', `env:${u}`);
+    return u;
+  }
   const hostUri =
     Constants.expoConfig?.hostUri ??
     (Constants as any).expoGoConfig?.debuggerHost ??
     (Constants as any).manifest?.debuggerHost;
-
   const host = hostUri?.split(':')[0];
-  if (host) return `http://${host}:3000/api/v1`;
-
+  if (host) {
+    const u = `http://${host}:3000/api/v1`;
+    // eslint-disable-next-line no-console
+    console.log('[RIDEWAY-DIAG] driverAPI_BASE_SOURCE', `expoHost:${u}`);
+    return u;
+  }
   const fallbackHost = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
-  return `http://${fallbackHost}:3000/api/v1`;
+  const u = `http://${fallbackHost}:3000/api/v1`;
+  // eslint-disable-next-line no-console
+  console.log('[RIDEWAY-DIAG] driverAPI_BASE_SOURCE', `fallback:${u}`);
+  return u;
 }
 
 const API_BASE_URL = getApiBaseUrl();
+// eslint-disable-next-line no-console
+console.log('[RIDEWAY-DIAG] driverAPI_BASE_URL_FINAL', API_BASE_URL);
 const TOKEN_KEY = 'supabase_token';
 
 export const driverAPI = {

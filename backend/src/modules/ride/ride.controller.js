@@ -2,9 +2,10 @@ const rideService = require('./ride.service');
 
 exports.requestRide = async (req, res) => {
   try {
-    const { riderId, pickup, dropoff, fare, distance, duration, vehicleType } = req.body;
+    const { riderId, pickup, dropoff, fare, distance, duration, vehicleType, passengerName, passengerPhone } = req.body;
     const result = await rideService.createRideRequest(
-      riderId, pickup, dropoff, fare, distance, duration, vehicleType
+      riderId, pickup, dropoff, fare, distance, duration, vehicleType,
+      { passengerName, passengerPhone }
     );
     res.status(201).json(result);
   } catch (error) {
@@ -24,11 +25,13 @@ exports.acceptRide = async (req, res) => {
 };
 
 exports.updateRideStatus = async (req, res) => {
+  const { rideId } = req.params;
+  const { status } = req.body;
+  const driverId = req.user.id;
+  const ts = new Date().toISOString();
+  // eslint-disable-next-line no-console
+  console.log(`[RIDEWAY-DIAG] RIDE_COMPLETION_REQUEST ts=${ts} rideId=${rideId} status=${status} driverId=${driverId} endpoint=PUT:/rides/:rideId/status`);
   try {
-    const { rideId } = req.params;
-    const { status } = req.body;
-    const driverId = req.user.id;
-
     const validStatuses = ['DRIVER_ARRIVING', 'RIDE_STARTED', 'RIDE_COMPLETED'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
@@ -39,6 +42,8 @@ exports.updateRideStatus = async (req, res) => {
     const ride = await rideService.updateRideStatus(rideId, driverId, status);
     if (!ride) return res.status(404).json({ error: 'Ride not found or not assigned to you' });
 
+    // eslint-disable-next-line no-console
+    console.log(`[RIDEWAY-DIAG] RIDE_COMPLETION_EMIT ts=${new Date().toISOString()} rideId=${rideId} status=${ride.status} event=ride:status_changed riderRoom=rider:${ride.rider_id} layer=controller.updateRideStatus`);
     res.status(200).json(ride);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -59,13 +64,17 @@ exports.getRide = async (req, res) => {
 };
 
 exports.completeRide = async (req, res) => {
+  const { rideId } = req.params;
+  const driverId = req.user.id;
+  const ts = new Date().toISOString();
+  // eslint-disable-next-line no-console
+  console.log(`[RIDEWAY-DIAG] RIDE_COMPLETION_REQUEST ts=${ts} rideId=${rideId} status=RIDE_COMPLETED driverId=${driverId} endpoint=POST:/rides/:rideId/complete`);
   try {
-    const { rideId } = req.params;
-    const driverId = req.user.id;
-
     const ride = await rideService.completeRide(rideId, driverId);
     if (!ride) return res.status(404).json({ error: 'Ride not found or not assigned to you' });
 
+    // eslint-disable-next-line no-console
+    console.log(`[RIDEWAY-DIAG] RIDE_COMPLETION_EMIT ts=${new Date().toISOString()} rideId=${rideId} status=${ride.status} event=ride:status_changed riderRoom=rider:${ride.rider_id} layer=controller.completeRide`);
     res.status(200).json(ride);
   } catch (error) {
     res.status(500).json({ error: error.message });

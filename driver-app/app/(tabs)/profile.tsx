@@ -3,15 +3,22 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDriverStore } from '../../store/driverStore';
+import { useRideStore } from '../../store/rideStore';
+import { driverAPI } from '../../services/driverAPI';
 import { colors, spacing, borderRadius, fontSize, fontWeight } from '../../constants/theme';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user } = useAuth();
-  const { driver, logout } = useDriverStore();
+  const { user, signOut } = useAuth();
+  const { driver, logout, is_online } = useDriverStore();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (is_online) {
+      await driverAPI.setOffline().catch(() => {});
+    }
+    await signOut();
     logout();
+    useRideStore.getState().clearRide();
     router.replace('/(auth)/login');
   };
 

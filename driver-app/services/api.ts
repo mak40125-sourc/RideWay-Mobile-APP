@@ -24,25 +24,45 @@ function getExpoHost() {
 
 function getApiBaseUrl() {
   const configuredUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+  // Runtime diagnostics: log which branch wins.
+  // eslint-disable-next-line no-console
+  console.log('[RIDEWAY-DIAG] API_URL_RESOLVE', JSON.stringify({
+    env_EXPO_PUBLIC_API_BASE_URL: process.env.EXPO_PUBLIC_API_BASE_URL ?? null,
+    env_configuredUrl: configuredUrl || null,
+    expo_hostUri: (() => { try { return (Constants as any).expoConfig?.hostUri ?? (Constants as any).expoGoConfig?.debuggerHost ?? (Constants as any).manifest?.debuggerHost ?? null; } catch { return null; } })(),
+    expo_host: getExpoHost(),
+    platform: Platform.OS,
+  }));
 
   if (configuredUrl) {
-    return normalizeApiBaseUrl(configuredUrl);
+    const url = normalizeApiBaseUrl(configuredUrl);
+    // eslint-disable-next-line no-console
+    console.log('[RIDEWAY-DIAG] API_BASE_SOURCE', `env:${url}`);
+    return url;
   }
 
   const host = getExpoHost();
 
   if (host) {
-    return `http://${host}:3000${API_PATH}`;
+    const url = `http://${host}:3000${API_PATH}`;
+    // eslint-disable-next-line no-console
+    console.log('[RIDEWAY-DIAG] API_BASE_SOURCE', `expoHost:${url}`);
+    return url;
   }
 
   const fallbackHost = Platform.OS === "android" ? "10.0.2.2" : "localhost";
-  return `http://${fallbackHost}:3000${API_PATH}`;
+  const url = `http://${fallbackHost}:3000${API_PATH}`;
+  // eslint-disable-next-line no-console
+  console.log('[RIDEWAY-DIAG] API_BASE_SOURCE', `fallback:${url}`);
+  return url;
 }
 
 const API_BASE_URL = getApiBaseUrl();
 
 if (__DEV__) {
-  console.log("RideWay API base URL:", API_BASE_URL);
+  // eslint-disable-next-line no-console
+  console.log('[RIDEWAY-DIAG] API_BASE_URL_FINAL', API_BASE_URL);
+  try { const { diagLogger } = require('../utils/diagLog'); diagLogger.log('API_BASE_URL', `${API_BASE_URL} src=${process.env.EXPO_PUBLIC_API_BASE_URL ? 'env' : getExpoHost() ? 'expoHost' : 'fallback'} platform=${Platform.OS}`); } catch {}
 }
 
 const TOKEN_KEY = "supabase_token";
@@ -79,9 +99,15 @@ async function request<T>(
 
   const url = `${API_BASE_URL}${endpoint}`;
   const headers = await getHeaders();
+  const startMs = Date.now();
+  const timeoutMs = 10000;
+
+  // eslint-disable-next-line no-console
+  console.log('[RIDEWAY-DIAG] API_REQUEST_START', JSON.stringify({ method, endpoint, url, apiBaseUrl: API_BASE_URL, timeoutMs, startIso: new Date(startMs).toISOString() }));
+  try { const { diagLogger } = require('../utils/diagLog'); diagLogger.log('API_REQUEST_START', `${method} ${endpoint} url=${url} timeout=${timeoutMs} base=${API_BASE_URL}`); } catch {}
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
 
   try {
@@ -91,8 +117,18 @@ async function request<T>(
       body: body ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });
+    const elapsed = Date.now() - startMs;
+    // eslint-disable-next-line no-console
+    console.log('[RIDEWAY-DIAG] API_REQUEST_RESPONSE', JSON.stringify({ method, endpoint, url, status: response.status, elapsedMs: elapsed }));
+    try { const { diagLogger } = require('../utils/diagLog'); diagLogger.log('API_RESPONSE', `${method} ${endpoint} status=${response.status} elapsed=${elapsed}ms`); } catch {}
   } catch (err) {
-    if (controller.signal.aborted) {
+    const elapsed = Date.now() - startMs;
+    const isAbort = controller.signal.aborted;
+    const msg = err instanceof Error ? err.message : String(err);
+    // eslint-disable-next-line no-console
+    console.log('[RIDEWAY-DIAG] API_REQUEST_FAIL', JSON.stringify({ method, endpoint, url, apiBaseUrl: API_BASE_URL, elapsedMs: elapsed, isAbort, error: msg, type: isAbort ? 'TIMEOUT' : 'CONN_FAIL' }));
+    try { const { diagLogger } = require('../utils/diagLog'); diagLogger.log(isAbort ? 'API_TIMEOUT' : 'API_CONN_FAIL', `${method} ${endpoint} url=${url} elapsed=${elapsed}ms err=${msg}`); } catch {}
+    if (isAbort) {
       throw new Error(`Request timed out for ${url}. Check backend IP and connectivity.`);
     }
     throw new Error(
@@ -118,7 +154,10 @@ async function request<T>(
 }
 
 export function getWebSocketUrl(): string {
-  return API_BASE_URL.replace(/\/api\/v1$/, '').replace(/^http/, 'ws');
+  const ws = API_BASE_URL.replace(/\/api\/v1$/, '').replace(/^http/, 'ws');
+  // eslint-disable-next-line no-console
+  console.log('[RIDEWAY-DIAG] WS_URL', ws);
+  return ws;
 }
 
 export const api = {

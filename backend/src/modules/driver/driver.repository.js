@@ -28,8 +28,8 @@ exports.createDriver = async (userId, data) => {
       vehicle_number,
       vehicle_model: vehicle_model || null,
       vehicle_color: vehicle_color || null,
-      kyc_status: 'verified',
-      is_verified: true,
+      kyc_status: 'pending',
+      is_verified: false,
     })
     .select()
     .single();
@@ -48,7 +48,7 @@ exports.ensureProfile = async (userId, email) => {
   if (!existing) {
     const { error } = await supabaseAdmin.from('profiles').insert({
       id: userId,
-      name: email || 'Driver',
+      full_name: email || 'Driver',
       role: 'driver',
     });
     if (error) throw error;

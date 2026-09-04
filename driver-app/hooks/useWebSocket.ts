@@ -56,6 +56,9 @@ export function useWebSocket(callbacks: UseWebSocketCallbacks) {
           distance: data.distance,
           duration: data.duration,
           riderName: data.riderName,
+          passengerName: data.passengerName || null,
+          passengerPhone: data.passengerPhone || null,
+          expiresAt: typeof data.expiresAt === 'number' ? data.expiresAt : null,
         };
         callbacks.onRideRequest(request);
       });

@@ -20,6 +20,7 @@ import RideStatusCard from '../../components/driver/RideStatusCard';
 import WalletWarning from '../../components/wallet/WalletWarning';
 import MenuButton from '../../components/driver/MenuButton';
 import SideMenu from '../../components/driver/SideMenu';
+import { RideRequestSheet } from '../../components/driver/ride-request/RideRequestSheet';
 import { colors } from '../../constants/theme';
 import { WALLET_MINIMUM } from '../../constants/wallet';
 import { diagLogger } from '../../utils/diagLog';
@@ -33,7 +34,7 @@ export default function DriverHomeScreen() {
   const { driver, is_online, setDriver, setOnline, setStatus, logout, location: driverLocation } = useDriverStore();
   const { balance } = useWalletStore();
   const { startTracking, stopTracking, isTracking } = useDriverLocation();
-  const { user, authUser } = useAuth();
+  const { user, authUser, signOut } = useAuth();
   const insets = useSafeAreaInsets();
   const [fetching, setFetching] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -93,11 +94,9 @@ export default function DriverHomeScreen() {
     }
   }, [is_online, isTracking, startTracking, stopTracking]);
 
-  useRideListener({
-    onRequest: () => {
-      router.push('/(modals)/ride-request');
-    },
-  });
+  useRideListener();
+
+  const current_request = useRideStore((s) => s.current_request);
 
   const handleToggleOnline = useCallback((online: boolean) => {
     setOnline(online);
@@ -130,11 +129,17 @@ export default function DriverHomeScreen() {
   const handleLogout = useCallback(() => {
     setIsMenuOpen(false);
     setTimeout(() => {
-      logout();
-      useRideStore.getState().clearRide();
-      router.replace('/(auth)/login');
+      void (async () => {
+        if (is_online) {
+          await driverAPI.setOffline().catch(() => {});
+        }
+        await signOut();
+        logout();
+        useRideStore.getState().clearRide();
+        router.replace('/(auth)/login');
+      })();
     }, 350);
-  }, [logout, router]);
+  }, [signOut, logout, router, is_online]);
 
   const contentAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: contentOffset.value }],
@@ -244,6 +249,8 @@ export default function DriverHomeScreen() {
         >
           <Ionicons name="locate-outline" size={22} color="#111111" />
         </TouchableOpacity>
+
+        {current_request ? <RideRequestSheet key={current_request.rideId} request={current_request} /> : null}
       </View>
     );
   }
