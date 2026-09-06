@@ -41,6 +41,11 @@ exports.getRide = async (rideId) => {
 const mapRpcError = (error) => {
   if (!error) return error;
   const msg = error.message || '';
+  if (msg.includes('Could not find the function')) {
+    const e = new Error(msg);
+    e.code = 'RPC_NOT_FOUND';
+    return e;
+  }
   if (msg.includes('Ride already assigned') || msg.includes('Invalid transition') || msg.includes('already terminal') || msg.includes('not in accept-able state')) {
     const e = new Error(msg);
     e.status = 409;
@@ -59,6 +64,29 @@ const mapRpcError = (error) => {
   return error;
 };
 
+async function fallbackTransition(rideId, actorId, newStatus, actorRole) {
+  const { isValidTransition } = require('./ride.lifecycle');
+  const { data: ride, error } = await supabaseAdmin.from('rides').select('*').eq('id', rideId).maybeSingle();
+  if (error) throw error;
+  if (!ride) return null;
+  if (ride.driver_id && actorRole === 'driver' && ride.driver_id !== actorId && newStatus !== 'CANCELLED') {
+    const e = new Error('Not authorized for this ride');
+    e.status = 403;
+    throw e;
+  }
+  if (ride.status === newStatus) return withPassenger(ride);
+  if (!isValidTransition(ride.status, newStatus)) {
+    const e = new Error(`Invalid transition: ${ride.status} -> ${newStatus}`);
+    e.status = 409;
+    throw e;
+  }
+  // eslint-disable-next-line no-console
+  console.log(`[RIDEWAY-DIAG] RIDE_FALLBACK_TRANSITION rideId=${rideId} ${ride.status}->${newStatus} (RPC not found, using JS validation)`);
+  const { data, error: upErr } = await supabaseAdmin.from('rides').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', rideId).select().maybeSingle();
+  if (upErr) throw upErr;
+  return withPassenger(data);
+}
+
 exports.updateStatus = async (rideId, driverId, status) => {
   const ts = new Date().toISOString();
   // eslint-disable-next-line no-console
@@ -71,6 +99,9 @@ exports.updateStatus = async (rideId, driverId, status) => {
   });
   if (error) {
     const mapped = mapRpcError(error);
+    if (mapped && mapped.code === 'RPC_NOT_FOUND') {
+      return fallbackTransition(rideId, driverId, status, 'driver');
+    }
     if (mapped === null) return null;
     if (mapped.status) throw mapped;
     throw error;
@@ -93,6 +124,9 @@ exports.completeRide = async (rideId, driverId) => {
   });
   if (error) {
     const mapped = mapRpcError(error);
+    if (mapped && mapped.code === 'RPC_NOT_FOUND') {
+      return fallbackTransition(rideId, driverId, 'RIDE_COMPLETED', 'driver');
+    }
     if (mapped === null) return null;
     if (mapped.status) throw mapped;
     throw error;
@@ -112,6 +146,9 @@ exports.cancelRide = async (rideId, driverId, actorRole = 'driver') => {
   });
   if (error) {
     const mapped = mapRpcError(error);
+    if (mapped && mapped.code === 'RPC_NOT_FOUND') {
+      return fallbackTransition(rideId, driverId, 'CANCELLED', actorRole);
+    }
     if (mapped === null) return null;
     if (mapped.status) throw mapped;
     throw error;
@@ -135,7 +172,32 @@ exports.createRideIdempotent = async ({ rideId, riderId, pickupLat, pickupLng, d
     p_duration: duration,
     p_idempotency_key: idempotencyKey || null,
   });
-  if (error) throw error;
+  if (error) {
+    if (error.message && error.message.includes('Could not find the function')) {
+      // Fallback when migration not yet applied: insert directly without idempotency column (graceful)
+      // eslint-disable-next-line no-console
+      console.log(`[RIDEWAY-DIAG] RIDE_FALLBACK_CREATE rideId=${rideId} (RPC not found, inserting without idempotency_key)`);
+      const payload = {
+        id: rideId,
+        rider_id: riderId,
+        pickup_location: `SRID=4326;POINT(${pickupLng} ${pickupLat})`,
+        drop_location: `SRID=4326;POINT(${dropLng} ${dropLat})`,
+        pickup_address: pickupAddress || '',
+        drop_address: dropAddress || '',
+        fare, distance, duration,
+        status: 'SEARCHING_DRIVER',
+      };
+      const { data: inserted, error: insErr } = await supabaseAdmin.from('rides').insert(payload).select().maybeSingle();
+      if (insErr && insErr.message.includes('duplicate')) {
+        // Check for existing by idempotency key fallback path (should not happen without column)
+        const { data: existing } = await supabaseAdmin.from('rides').select('*').eq('id', rideId).maybeSingle();
+        return withPassenger(existing);
+      }
+      if (insErr) throw insErr;
+      return withPassenger(inserted);
+    }
+    throw error;
+  }
   if (data && Array.isArray(data)) return withPassenger(data[0]);
   return withPassenger(data);
 };
