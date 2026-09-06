@@ -23,6 +23,16 @@ const updateRideStatus = async (rideId, driverId, status) => {
       stage(correlationId, '15', 'ride_transition_idempotent', { rideId, driverId, status });
     } else {
       stage(correlationId, '15', 'ride_transition', { rideId, driverId, from: before?.status ?? null, to: ride.status });
+      // Referral hook for RIDE_COMPLETED via status endpoint
+      if (ride.status === 'RIDE_COMPLETED') {
+        try {
+          const { referralService } = require('../referral');
+          const referralResult = await referralService.tryRewardForRide(ride);
+          if (referralResult) stage(correlationId, '16', 'referral_rewarded', { rideId, referralId: referralResult.id });
+        } catch (e) {
+          stage(correlationId, '16', 'referral_reward_failed', { rideId, error: e.message });
+        }
+      }
     }
     // Only emit after successful commit; idempotent hits still publish current authoritative state
     try {
@@ -48,12 +58,27 @@ const completeRide = async (rideId, driverId) => {
   const ts = new Date().toISOString();
   // eslint-disable-next-line no-console
   console.log(`[RIDEWAY-DIAG] RIDE_COMPLETION_REQUEST ts=${ts} rideId=${rideId} status=RIDE_COMPLETED driverId=${driverId} layer=service.completeRide`);
+  const before = await rideRepository.getRide(rideId);
   const ride = await rideRepository.completeRide(rideId, driverId);
   // eslint-disable-next-line no-console
   console.log(`[RIDEWAY-DIAG] RIDE_COMPLETED_PERSISTED ts=${new Date().toISOString()} rideId=${rideId} status=${ride?.status ?? 'null'} layer=service.completeRide persisted=${!!ride}`);
   if (ride) {
+    const isIdempotentRetry = before && before.status === 'RIDE_COMPLETED';
     track(correlationId, { rideId });
-    stage(correlationId, '15', 'ride_completed', { rideId, driverId });
+    stage(correlationId, '15', isIdempotentRetry ? 'ride_completed_idempotent' : 'ride_completed', { rideId, driverId });
+    // Referral qualification: only on first authoritative completion, not on idempotent retry (still idempotent via RPC)
+    if (!isIdempotentRetry) {
+      try {
+        const { referralService } = require('../referral');
+        const referralResult = await referralService.tryRewardForRide(ride);
+        if (referralResult) {
+          stage(correlationId, '16', 'referral_rewarded', { rideId, referralId: referralResult.id, riderId: ride.rider_id, driverId: referralResult.referrer_driver_id });
+        }
+      } catch (e) {
+        // Do not break ride completion
+        stage(correlationId, '16', 'referral_reward_failed', { rideId, error: e.message });
+      }
+    }
     try {
       const { getIO } = require('../../core/socket/socket');
       const io = getIO();

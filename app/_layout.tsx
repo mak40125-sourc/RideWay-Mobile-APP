@@ -11,6 +11,7 @@ import { LoginScreen } from "../components/auth/login-screen";
 import { ProfileCreationScreen } from "../components/profile/profile-creation-screen";
 import { useRiderRideSocket } from "../hooks/useRiderRideSocket";
 import { useRideRecovery } from "../hooks/useRideRecovery";
+import { useReferralAttribution } from "../hooks/useReferralAttribution";
 import { rideLog, setDiagnosticScreen } from "../utils/ride-request-diagnostics";
 
 SplashScreen.preventAutoHideAsync();
@@ -48,6 +49,7 @@ function RootNavigator() {
   useRiderRideSocket(!!user);
   // Global recovery — authoritative backend reconciliation after crash/kill/foreground
   useRideRecovery();
+  useReferralAttribution();
 
   useEffect(() => {
     // Start the permission/GPS chain while auth restoration is still in

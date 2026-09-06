@@ -22,6 +22,7 @@ interface SideMenuProps {
 
 const MENU_WIDTH = 280;
 const ITEMS = [
+  { label: 'Refer & Earn', route: '/(referral)/earn' },
   { label: 'Driver Profile', route: '/(tabs)/profile' },
   { label: 'Ride History', route: '/(tabs)/history' },
   { label: 'Earnings', route: '/(tabs)/earnings' },

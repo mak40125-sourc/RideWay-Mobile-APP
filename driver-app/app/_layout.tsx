@@ -47,6 +47,7 @@ function RootNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
         <Stack.Screen name="(driver)" />
         <Stack.Screen name="(tabs)" options={{ animation: 'slide_from_left' }} />
         <Stack.Screen name="(wallet)" />
+        <Stack.Screen name="(referral)" />
         <Stack.Screen name="(modals)" options={{ presentation: 'modal' }} />
         <Stack.Screen name="index" />
       </Stack>
