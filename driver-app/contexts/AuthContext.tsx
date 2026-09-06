@@ -4,10 +4,13 @@ import { getProfile, signOut as supabaseSignOut, supabase, type UserProfile } fr
 import { clearAuthToken, setAuthToken } from "../services/api";
 import { diagLogger } from "../utils/diagLog";
 
+export type AuthState = 'BOOTSTRAPPING' | 'AUTHENTICATED' | 'UNAUTHENTICATED';
+
 type AuthContextType = {
   authUser: User | null;
   user: UserProfile | null | undefined;
   loading: boolean;
+  authState: AuthState;
   isAuthenticated: boolean;
   refreshProfile: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -17,6 +20,7 @@ const AuthContext = createContext<AuthContextType>({
   authUser: null,
   user: undefined,
   loading: true,
+  authState: 'BOOTSTRAPPING',
   isAuthenticated: false,
   refreshProfile: async () => {},
   signOut: async () => {},
@@ -26,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [user, setUser] = useState<UserProfile | null | undefined>(undefined);
   const [loading, setLoading] = useState(true);
+  const [authState, setAuthState] = useState<AuthState>('BOOTSTRAPPING');
   const lastAppliedAccessToken = useRef<string | null>(null);
   const sessionVersion = useRef(0);
   const authUserRef = useRef<User | null>(null);
@@ -71,26 +76,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
+    let initialResolved = false;
+    diagLogger.log('AUTH_BOOTSTRAPPING');
 
-    // Set loading false immediately — never block app startup on network
-    setLoading(false);
+    const resolveInitialAuth = (session: Session | null, source: string) => {
+      if (initialResolved) return;
+      initialResolved = true;
+      const nextState: AuthState = session ? 'AUTHENTICATED' : 'UNAUTHENTICATED';
+      diagLogger.log('AUTH_SESSION_RESOLVED', `${source} ${nextState}`);
+      if (nextState === 'AUTHENTICATED') diagLogger.log('AUTHENTICATED', `user=${session?.user.id ?? ''}`);
+      else diagLogger.log('UNAUTHENTICATED', source);
+      applySession(session);
+      if (isMounted) {
+        setAuthState(nextState);
+        setLoading(false);
+      }
+    };
 
-    // Session restoration in background (no await — can't block)
     supabase.auth.getSession()
       .then(({ data, error }) => {
-        if (!error && isMounted) {
-          diagLogger.setNetwork('UNKNOWN');
-          diagLogger.log('AUTH_RESTORE_ATTEMPT', data.session ? 'found-session' : 'no-session');
-          applySession(data.session);
+        if (!isMounted) return;
+        if (error) {
+          diagLogger.log('AUTH_RESTORE_ERROR', error.message);
+          resolveInitialAuth(null, 'getSession:error');
+          return;
         }
+        diagLogger.setNetwork('UNKNOWN');
+        diagLogger.log('AUTH_RESTORE_ATTEMPT', data.session ? 'found-session' : 'no-session');
+        resolveInitialAuth(data.session, 'getSession');
       })
-      .catch(() => {
-        if (isMounted) applySession(null);
+      .catch((err) => {
+        if (isMounted) {
+          diagLogger.log('AUTH_RESTORE_THROW', err instanceof Error ? err.message : String(err));
+          resolveInitialAuth(null, 'getSession:throw');
+        }
       });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      diagLogger.log('AUTH_STATE_CHANGE', _event);
-      if (isMounted) applySession(session);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      diagLogger.log('AUTH_STATE_CHANGE', event);
+      if (!isMounted) return;
+      if (event === 'INITIAL_SESSION') {
+        // INITIAL_SESSION races with getSession — use whichever arrives first as authoritative initial decision
+        resolveInitialAuth(session, 'INITIAL_SESSION');
+        return;
+      }
+      // Post-bootstrap events (SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED, etc.) update auth without re-entering BOOTSTRAPPING
+      if (initialResolved) {
+        applySession(session);
+        const nextState: AuthState = session ? 'AUTHENTICATED' : 'UNAUTHENTICATED';
+        setAuthState(nextState);
+        setLoading(false);
+      } else {
+        // Edge: no INITIAL_SESSION event, getSession still pending — treat as initial
+        resolveInitialAuth(session, `onAuthStateChange:${event}`);
+      }
     });
 
     return () => {
@@ -115,7 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ authUser, user, loading, isAuthenticated: !!authUser, refreshProfile, signOut }}>
+    <AuthContext.Provider value={{ authUser, user, loading, authState, isAuthenticated: authState === 'AUTHENTICATED', refreshProfile, signOut }}>
       {children}
     </AuthContext.Provider>
   );

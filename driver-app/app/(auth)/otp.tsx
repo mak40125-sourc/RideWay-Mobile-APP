@@ -5,15 +5,14 @@ import { useAuth } from '../../contexts/AuthContext';
 
 export default function OTPScreen() {
   const router = useRouter();
-  const { isAuthenticated, loading } = useAuth();
+  const { authState } = useAuth();
 
   useEffect(() => {
-    if (!loading) {
-      if (isAuthenticated) {
-        router.replace('/(driver)/home');
-      }
+    if (authState === 'BOOTSTRAPPING') return;
+    if (authState === 'AUTHENTICATED') {
+      router.replace('/(driver)/home');
     }
-  }, [isAuthenticated, loading]);
+  }, [authState]);
 
   return (
     <View style={styles.container}>

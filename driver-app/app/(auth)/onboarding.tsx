@@ -19,30 +19,25 @@ type Mode = "signin" | "signup";
 
 export default function OnboardingScreen() {
   const router = useRouter();
-  const { isAuthenticated, loading, user } = useAuth();
+  const { authState, user } = useAuth();
   const [mode, setMode] = useState<Mode>("signin");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [authChecked, setAuthChecked] = useState(false);
 
+  // Defensive deep-link guard: if already authenticated, bounce to driver.
+  // Root routing (app/index.tsx) is authoritative; this is only for direct navigation to /onboarding.
   useEffect(() => {
-    const t = setTimeout(() => setAuthChecked(true), 120);
-    return () => clearTimeout(t);
-  }, []);
-
-  useEffect(() => {
-    if (!loading && isAuthenticated && user !== undefined) {
+    if (authState === 'BOOTSTRAPPING') return;
+    if (authState === 'AUTHENTICATED' && user !== undefined) {
       if (user?.full_name) {
         router.replace("/(driver)/home");
       } else {
         router.replace("/(auth)/kyc");
       }
     }
-  }, [isAuthenticated, loading, user]);
-
-  if (!authChecked) return null;
+  }, [authState, user]);
 
   const isValid =
     mode === "signin"

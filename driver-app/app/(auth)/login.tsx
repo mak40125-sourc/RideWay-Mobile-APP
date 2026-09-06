@@ -5,17 +5,16 @@ import { useAuth } from '../../contexts/AuthContext';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { isAuthenticated, loading } = useAuth();
+  const { authState } = useAuth();
 
   useEffect(() => {
-    if (!loading) {
-      if (isAuthenticated) {
-        router.replace('/(driver)/home');
-      } else {
-        router.replace('/(auth)/onboarding');
-      }
+    if (authState === 'BOOTSTRAPPING') return;
+    if (authState === 'AUTHENTICATED') {
+      router.replace('/(driver)/home');
+    } else if (authState === 'UNAUTHENTICATED') {
+      router.replace('/(auth)/onboarding');
     }
-  }, [isAuthenticated, loading]);
+  }, [authState]);
 
   return (
     <View style={styles.container}>
