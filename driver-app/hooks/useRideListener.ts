@@ -41,31 +41,34 @@ export const useRideListener = (options?: UseRideListenerOptions) => {
     },
   });
 
+  const currentRideId = useRideStore((s) => s.current_ride?.id ?? null);
+
   useEffect(() => {
-    const rideId = useRideStore.getState().current_ride?.id;
-    if (rideId && rideId !== currentRideIdRef.current) {
-      currentRideIdRef.current = rideId;
+    const rideId = currentRideId;
+    if (!rideId) return;
+    if (rideId === currentRideIdRef.current) return;
+    currentRideIdRef.current = rideId;
 
-      const sub = rideAPI.subscribeToRideUpdates(rideId, (updatedRide) => {
-        const incoming = updatedRide.status;
-        const cur = useRideStore.getState().current_ride?.status;
-        const curOrder = statusOrder(cur);
-        const incOrder = statusOrder(incoming);
-        if (curOrder !== null && incOrder !== null && incOrder < curOrder) {
-          diagLogger.log('RIDE_STALE_TRANSITION', `rideId=${rideId} cur=${cur} incoming=${incoming} ignored`);
-          return;
-        }
-        diagLogger.log('RIDE_UPDATE_EVENT', `rideId=${rideId} status=${updatedRide.status}`);
-        setCurrentRide(updatedRide);
-        options?.onRideUpdate?.();
-      });
+    const sub = rideAPI.subscribeToRideUpdates(rideId, (updatedRide) => {
+      const incoming = updatedRide.status;
+      const cur = useRideStore.getState().current_ride?.status;
+      const curOrder = statusOrder(cur);
+      const incOrder = statusOrder(incoming);
+      if (curOrder !== null && incOrder !== null && incOrder < curOrder) {
+        diagLogger.log('RIDE_STALE_TRANSITION', `rideId=${rideId} cur=${cur} incoming=${incoming} ignored`);
+        return;
+      }
+      diagLogger.log('RIDE_UPDATE_EVENT', `rideId=${rideId} status=${updatedRide.status}`);
+      setCurrentRide(updatedRide);
+      optionsRef.current?.onRideUpdate?.();
+    });
 
-      return () => {
-        diagLogger.log('RIDE_SUB_UNSUB', `rideId=${rideId}`);
-        sub.unsubscribe();
-      };
-    }
-  }, []);
+    return () => {
+      diagLogger.log('RIDE_SUB_UNSUB', `rideId=${rideId}`);
+      sub.unsubscribe();
+      if (currentRideIdRef.current === rideId) currentRideIdRef.current = null;
+    };
+  }, [currentRideId]);
 
   return { clearRide };
 };

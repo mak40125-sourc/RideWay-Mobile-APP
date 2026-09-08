@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { useDriverStore } from '../../store/driverStore';
+import { useStartupStore } from '../../store/startupStore';
 
 const STATUS_MESSAGES: Record<string, { message: string; color: string }> = {
   OFFLINE: { message: 'You are offline', color: '#9CA3AF' },
@@ -15,6 +16,17 @@ const STATUS_MESSAGES: Record<string, { message: string; color: string }> = {
 
 export default function RideStatusCard() {
   const { status } = useDriverStore();
+  const appReady = useStartupStore((s) => s.appReady);
+  const rideRecovery = useStartupStore((s) => s.rideRecovery);
+  const activeStatuses = ['NAVIGATING_TO_PICKUP', 'ARRIVED_AT_PICKUP', 'NAVIGATING_TO_DROP', 'RIDE_STARTED', 'ACCEPTED', 'REQUEST_RECEIVED'];
+  if (!appReady && activeStatuses.includes(status) && rideRecovery === 'UNRESOLVED') {
+    return (
+      <View style={styles.container}>
+        <View style={[styles.dot, { backgroundColor: '#F59E0B' }]} />
+        <Text style={styles.message}>Recovering ride…</Text>
+      </View>
+    );
+  }
   const current = STATUS_MESSAGES[status] || STATUS_MESSAGES.OFFLINE;
 
   return (

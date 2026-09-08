@@ -34,7 +34,7 @@ export default function DriverHomeScreen() {
   const { driver, is_online, setDriver, setOnline, setStatus, logout, location: driverLocation } = useDriverStore();
   const { balance } = useWalletStore();
   const { startTracking, stopTracking, isTracking } = useDriverLocation();
-  const { user, authUser, signOut } = useAuth();
+  const { user, authUser, authState, signOut } = useAuth();
   const insets = useSafeAreaInsets();
   const [fetching, setFetching] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -48,8 +48,11 @@ export default function DriverHomeScreen() {
   });
 
   const fetchData = useCallback(() => {
+    if (authState === 'BOOTSTRAPPING') return;
     if (!authUser) {
-      router.replace('/(auth)/login');
+      if (authState === 'UNAUTHENTICATED') {
+        router.replace('/(auth)/login');
+      }
       return;
     }
     setFetching(true);
@@ -72,7 +75,7 @@ export default function DriverHomeScreen() {
       .finally(() => {
         setFetching(false);
       });
-  }, [authUser, router, setDriver]);
+  }, [authUser, authState, router, setDriver]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect

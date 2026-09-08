@@ -31,6 +31,7 @@ export const useDriverLocation = () => {
   };
 
   const startTracking = async () => {
+    if (watchSubscription.current || isTracking) return;
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {

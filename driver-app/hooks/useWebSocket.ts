@@ -85,29 +85,26 @@ export function useWebSocket(callbacks: UseWebSocketCallbacks) {
         diagLogger.log('RIDE_RECONCILIATION_STARTED', `socket_reconnect attempt=${attempt}`);
         void (async () => {
           try {
-            const { rideAPI } = await import('../services/rideAPI');
-            const { useRideStore } = await import('../store/rideStore');
+            const [{ reconcileRideOnce }, { useStartupStore }, authMod] = await Promise.all([
+              import('../services/rideRecoveryService'),
+              import('../store/startupStore'),
+              import('../contexts/AuthContext'),
+            ]);
+            void authMod;
             const { useDriverStore } = await import('../store/driverStore');
-            const ride = await rideAPI.getMyActiveRide();
-            if (ride) {
-              diagLogger.log('RIDE_RECONCILIATION_COMPLETED', `rideId=${ride.id} status=${ride.status} source=socket_reconnect`);
-              // Map backend ride status to driver status locally
-              const mapStatus = (s: string) => {
-                switch (s) {
-                  case 'DRIVER_ASSIGNED': return 'NAVIGATING_TO_PICKUP';
-                  case 'DRIVER_ARRIVING': return 'ARRIVED_AT_PICKUP';
-                  case 'RIDE_STARTED': return 'NAVIGATING_TO_DROP';
-                  default: return null;
-                }
-              };
-              const mapped = mapStatus(ride.status);
-              if (mapped) {
-                useRideStore.getState().setCurrentRide(ride);
-                useDriverStore.getState().setStatus(mapped as unknown as import('../types/driver').DriverStatus);
-              }
-            } else {
-              diagLogger.log('RIDE_RECONCILIATION_COMPLETED', 'no active ride on socket_reconnect');
+            // Auth user id via driver store fallback: rideRecoveryService resolves via passed id.
+            // Use persisted driver user_id if available, else skip (startup will handle).
+            const driverUserId = useDriverStore.getState().driver?.user_id ?? null;
+            if (!driverUserId) {
+              diagLogger.log('RIDE_RECOVERY_FAILED', 'socket_reconnect no-driver-user-id deferred to startup');
+              return;
             }
+            const st = useStartupStore.getState();
+            if (!st.appReady) {
+              diagLogger.log('RECONCILE_DEFERRED', 'socket_reconnect before APP_READY');
+              return;
+            }
+            await reconcileRideOnce('socket_reconnect', driverUserId);
           } catch (err) {
             diagLogger.log('RIDE_RECOVERY_FAILED', `socket_reconnect err=${err instanceof Error ? err.message : String(err)}`);
           }
