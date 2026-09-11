@@ -1,8 +1,23 @@
 const rideService = require('./ride.service');
 
+exports.estimateFare = async (req, res) => {
+  try {
+    const { pickup, dropoff, vehicleType } = req.body;
+    if (!pickup || !dropoff || !vehicleType) {
+      return res.status(422).json({ error: 'pickup, dropoff and vehicleType are required' });
+    }
+    const quote = await rideService.estimateFare(pickup, dropoff, vehicleType);
+    res.status(200).json(quote);
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
 exports.requestRide = async (req, res) => {
   try {
     const idempotencyKey = req.headers['x-idempotency-key'] || req.headers['idempotency-key'] || req.body.idempotencyKey || null;
+    // Client fare/distance/duration are accepted for backward compatibility but
+    // treated as untrusted; the matching service recomputes authoritative values.
     const { riderId, pickup, dropoff, fare, distance, duration, vehicleType, passengerName, passengerPhone } = req.body;
     const effectiveRiderId = riderId || req.user.id;
     const result = await rideService.createRideRequest(

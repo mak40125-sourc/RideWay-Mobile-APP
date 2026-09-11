@@ -219,6 +219,29 @@ export const useRideStore = create<RideState & RideActions>()(
       rideLog("RIDE_RESPONSE_RECEIVED", { userId, rideId: result.rideId, candidateCount: result.candidateCount, attempt, traceId });
       rideLog("RIDE_ID_RECEIVED", { userId, rideId: result.rideId, attempt, traceId });
 
+      // Authoritative fare wins: backend recomputes fare/distance/duration
+      // server-side; client values are untrusted display hints.
+      if (typeof result.fare === "number" && Number.isFinite(result.fare)) {
+        const s = get();
+        if (s.trip) {
+          set({
+            trip: {
+              ...s.trip,
+              fare: result.fare,
+              distance:
+                typeof result.distance === "number" && Number.isFinite(result.distance)
+                  ? result.distance
+                  : s.trip.distance,
+              duration:
+                typeof result.duration === "number" && Number.isFinite(result.duration)
+                  ? result.duration
+                  : s.trip.duration,
+            },
+          });
+        }
+        rideLog("RIDE_FARE_AUTHORITATIVE", { userId, rideId: result.rideId, fare: result.fare, attempt, traceId });
+      }
+
       set({
         rideId: result.rideId,
         status: "SEARCHING_DRIVER",

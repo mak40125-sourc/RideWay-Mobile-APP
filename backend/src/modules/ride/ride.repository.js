@@ -157,7 +157,7 @@ exports.cancelRide = async (rideId, driverId, actorRole = 'driver') => {
   return withPassenger(data);
 };
 
-exports.createRideIdempotent = async ({ rideId, riderId, pickupLat, pickupLng, dropLat, dropLng, pickupAddress, dropAddress, fare, distance, duration, idempotencyKey }) => {
+exports.createRideIdempotent = async ({ rideId, riderId, pickupLat, pickupLng, dropLat, dropLng, pickupAddress, dropAddress, fare, distance, duration, idempotencyKey, fareBreakdown = null, pricingVersion = null }) => {
   const { data, error } = await supabaseAdmin.rpc('create_ride_idempotent', {
     p_ride_id: rideId,
     p_rider_id: riderId,
@@ -171,6 +171,8 @@ exports.createRideIdempotent = async ({ rideId, riderId, pickupLat, pickupLng, d
     p_distance: distance,
     p_duration: duration,
     p_idempotency_key: idempotencyKey || null,
+    p_fare_breakdown: fareBreakdown,
+    p_pricing_version: pricingVersion,
   });
   if (error) {
     if (error.message && error.message.includes('Could not find the function')) {
@@ -185,6 +187,8 @@ exports.createRideIdempotent = async ({ rideId, riderId, pickupLat, pickupLng, d
         pickup_address: pickupAddress || '',
         drop_address: dropAddress || '',
         fare, distance, duration,
+        fare_breakdown: fareBreakdown,
+        pricing_version: pricingVersion,
         status: 'SEARCHING_DRIVER',
       };
       const { data: inserted, error: insErr } = await supabaseAdmin.from('rides').insert(payload).select().maybeSingle();

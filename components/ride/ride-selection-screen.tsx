@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native";
 
 import type { RideEstimate, RideOption } from "../home/types";
 import { useRideStore } from "../../context/ride-store";
+import { useFareEstimates } from "../../hooks/useFareEstimates";
 import { buildMapRegion } from "../../utils/map-region";
 import { calculateRideFare } from "./ride-helpers";
 import { RideMap } from "./ride-map";
@@ -31,11 +32,13 @@ export function RideSelectionScreen({ pickup, dropoff, estimate }: Props) {
   const selectedOptionLabel = useRideStore((s) => s.trip?.option?.label ?? null);
 
   const region = useMemo(() => buildMapRegion(pickup, dropoff), [dropoff, pickup]);
+  const fares = useFareEstimates(pickup, dropoff, estimate.distance, estimate.duration);
 
   const continueToConfirm = () => {
     const state = useRideStore.getState();
     const option = state.trip?.option || rideOptions[0];
-    const fare = calculateRideFare(option, estimate.distance, estimate.duration);
+    // Display hint only; backend recomputes the authoritative fare at booking.
+    const fare = fares?.[option.label] ?? calculateRideFare(option, estimate.distance, estimate.duration);
     setTrip({
       pickup,
       dropoff,
@@ -56,6 +59,7 @@ export function RideSelectionScreen({ pickup, dropoff, estimate }: Props) {
         <RideOptionsSheet
           distance={estimate.distance}
           duration={estimate.duration}
+          fares={fares}
           options={rideOptions}
           selectedOptionLabel={selectedOptionLabel}
           onSelectOption={(option: RideOption, fare) => {

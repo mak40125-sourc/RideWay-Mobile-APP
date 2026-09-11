@@ -12,6 +12,9 @@ type Props = {
   duration: number | null;
   options: RideOption[];
   selectedOptionLabel?: string | null;
+  // Backend-authoritative fares by option label. When present they replace the
+  // legacy local formula for display; the backend remains authoritative at booking.
+  fares?: Record<string, number> | null;
   onBack?: () => void;
   onSelectOption?: (option: RideOption, fare: number) => void;
   onContinue?: () => void;
@@ -22,6 +25,7 @@ export function RideOptionsSheet({
   duration,
   options,
   selectedOptionLabel,
+  fares,
   onBack,
   onSelectOption,
   onContinue,
@@ -48,7 +52,9 @@ export function RideOptionsSheet({
           showsVerticalScrollIndicator={false}>
           <View style={styles.optionsList}>
             {options.map((option) => {
-              const fare = distance !== null && duration !== null ? calculateRideFare(option, distance, duration) : 0;
+              const fare =
+                fares?.[option.label] ??
+                (distance !== null && duration !== null ? calculateRideFare(option, distance, duration) : 0);
               const isSelected = selectedOptionLabel === option.label;
               const iconSource = RIDE_ICON_ASSETS[option.vehicleType];
 

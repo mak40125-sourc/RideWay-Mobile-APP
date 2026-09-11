@@ -7,6 +7,11 @@ const { stage, track, currentCorrelationId } = require('../../core/logger/logger
 // keeps ride lifecycle persistence (status, completion, cancellation, history).
 const getRide = (rideId) => rideRepository.getRide(rideId);
 
+const estimateFare = async (pickup, dropoff, vehicleType) => {
+  const { pricingService } = require('../pricing');
+  return pricingService.quoteFare(pickup, dropoff, vehicleType);
+};
+
 const updateRideStatus = async (rideId, driverId, status) => {
   const ts = new Date().toISOString();
   // eslint-disable-next-line no-console
@@ -130,4 +135,5 @@ module.exports = {
   getRiderActiveRide,
   getDriverActiveRide,
   getRiderRideHistory,
+  estimateFare,
 };

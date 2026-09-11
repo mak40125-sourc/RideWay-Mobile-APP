@@ -2,6 +2,7 @@ import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-nativ
 import * as Haptics from "expo-haptics";
 
 import { useHomeStore, type Passenger, type PassengerMode } from "../../store/homeStore";
+import { useFareEstimates } from "../../hooks/useFareEstimates";
 import { useRideStore } from "../../context/ride-store";
 import { PickupCard } from "../PickupCard";
 import { AnimatedSection } from "./AnimatedSection";
@@ -46,6 +47,12 @@ export function BottomSheetContent({ onOpenLocationSelect, onRequestRide, onCanc
   const pickupLabel = pickup?.address ?? "Current location";
   const destinationLabel = destination?.address ?? "Where are you going?";
 
+  const fares = useFareEstimates(
+    pickup?.coordinates ?? null,
+    destination?.coordinates ?? null,
+    estimate?.distance ?? null,
+    estimate?.duration ?? null
+  );
   const tripMinutes = estimate ? Math.max(1, Math.round(estimate.duration)) : 0;
   const dropTime = new Date(Date.now() + tripMinutes * 60 * 1000).toLocaleTimeString([], {
     hour: "numeric",
@@ -110,7 +117,7 @@ export function BottomSheetContent({ onOpenLocationSelect, onRequestRide, onCanc
             <View style={{ marginTop: 12, gap: 8 }}>
               {rideOptions.map((option) => {
                 const isSelected = selectedOption.label === option.label;
-                const fare = calculateRideFare(option, estimate.distance, estimate.duration);
+                const fare = fares?.[option.label] ?? calculateRideFare(option, estimate.distance, estimate.duration);
                 const meta = getOptionMeta(option.label);
                 const iconSource = RIDE_ICON_ASSETS[option.vehicleType];
                 return (
@@ -191,7 +198,7 @@ export function BottomSheetContent({ onOpenLocationSelect, onRequestRide, onCanc
               style={[confirmButton, { backgroundColor: requesting || !passengerValid ? "#9CA3AF" : "#111111" }]}
             >
               <Text style={{ color: "#FFFFFF", fontSize: 16, fontFamily: "GeneralSans-Bold" }}>
-                Find Ride - {selectedOption.label} Rs {calculateRideFare(selectedOption, estimate.distance, estimate.duration)}
+                Find Ride - {selectedOption.label} Rs {fares?.[selectedOption.label] ?? calculateRideFare(selectedOption, estimate.distance, estimate.duration)}
               </Text>
             </PressableScale>
 

@@ -153,6 +153,8 @@ export function RiderHomeScreen() {
       return;
     }
 
+    // Untrusted display hint only; backend pricing engine recomputes the
+    // authoritative fare at POST /rides/request and overwrites trip.fare.
     const fare = calculateRideFare(selectedOption, estimate.distance, estimate.duration);
     const isOther = passengerMode === "other" && passenger?.name?.trim() && passenger?.phone?.trim();
 

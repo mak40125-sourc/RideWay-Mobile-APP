@@ -89,10 +89,34 @@ export function decodeRideLocation(loc: unknown): Coordinates | null {
   return null;
 }
 
+export type FareQuote = {
+  currency: string;
+  totalFare: number;
+  breakdown: { baseFare: number; distanceFare: number; timeFare: number };
+  distanceKm: number;
+  durationMin: number;
+  vehicleType: string;
+  pricingVersion: string;
+};
+
 export type RideRequestResult = {
   rideId: string;
   candidateCount: number;
+  fare?: number;
+  distance?: number;
+  duration?: number;
+  fareBreakdown?: FareQuote["breakdown"];
+  pricingVersion?: string;
+  vehicleType?: string;
 };
+
+export async function estimateFare(payload: {
+  pickup: Coordinates;
+  dropoff: Coordinates;
+  vehicleType: string;
+}): Promise<FareQuote> {
+  return api.post<FareQuote>("/rides/estimate", payload);
+}
 
 export async function requestRide(
   payload: RideRequestPayload & { idempotencyKey?: string },

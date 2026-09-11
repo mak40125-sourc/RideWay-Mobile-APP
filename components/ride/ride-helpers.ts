@@ -37,6 +37,10 @@ export function parseRideRoute(params: RideRouteParams): ParsedRideRoute | null 
   };
 }
 
+// Legacy display fallback only. The backend pricing engine
+// (backend/src/modules/pricing) is authoritative; this local formula must
+// never be trusted for booking. Used only when backend estimates are
+// unreachable, and overwritten by authoritative values on ride creation.
 export function calculateRideFare(option: RideOption, distance: number, duration: number) {
   return Math.round(option.baseFare + distance * option.perKm + duration * option.perMin);
 }

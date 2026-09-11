@@ -10,6 +10,9 @@ export default function RideCompletedScreen() {
   const { setStatus, earnings_today, setEarningsToday } = useDriverStore();
   const { current_ride, clearRide } = useRideStore();
 
+  // Display-only: fare comes from the backend-authoritative ride row.
+  // No commission model exists server-side today (commission = 0 by policy);
+  // earnings_today is a local display accumulator, not a ledger balance.
   const fare = current_ride?.fare || 0;
   const commission = 0;
   const earnings = fare;

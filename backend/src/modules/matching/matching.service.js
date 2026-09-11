@@ -71,6 +71,30 @@ const createRideRequest = async (riderId, pickup, dropoff, fare, distance, durat
   const pickupCoords = normalizeCoords(pickup);
   const dropoffCoords = normalizeCoords(dropoff);
 
+  // Backend-authoritative pricing: client fare/distance/duration are untrusted
+  // display hints and are never persisted. The pricing engine derives the
+  // authoritative values from coordinates + vehicle type.
+  const { pricingService } = require('../pricing');
+  const quote = await pricingService.quoteFare(pickupCoords, dropoffCoords, vehicleType);
+  const authFare = quote.totalFare;
+  const authDistance = quote.distanceKm;
+  const authDuration = quote.durationMin;
+  if (Number(fare) !== authFare || Number(distance) !== authDistance || Number(duration) !== authDuration) {
+    logger.warn({
+      type: 'pricing',
+      event: 'client_values_untrusted',
+      correlationId,
+      rideId,
+      riderId,
+      clientFare: fare,
+      clientDistance: distance,
+      clientDuration: duration,
+      authFare,
+      authDistance,
+      authDuration,
+    });
+  }
+
   const passengerName = passenger?.passengerName || null;
   const passengerPhone = passenger?.passengerPhone || null;
 
@@ -78,9 +102,10 @@ const createRideRequest = async (riderId, pickup, dropoff, fare, distance, durat
     await matchingRepository.setRidePassenger(rideId, passengerName, passengerPhone).catch(() => {});
   }
 
-  stage(correlationId, '2', 'ride_created', { rideId, riderId, pickup: pickupCoords, dropoff: dropoffCoords, vehicleType, idempotencyKey: idempotencyKey || undefined });
+  stage(correlationId, '2', 'ride_created', { rideId, riderId, pickup: pickupCoords, dropoff: dropoffCoords, vehicleType, idempotencyKey: idempotencyKey || undefined, authFare });
 
   // Postgres authoritative row first (idempotent) — Redis is ephemeral scratch.
+  // Persist authoritative fare snapshot, never client values.
   try {
     const rideRepository = require('../ride/ride.repository');
     const dbRide = await rideRepository.createRideIdempotent({
@@ -92,10 +117,12 @@ const createRideRequest = async (riderId, pickup, dropoff, fare, distance, durat
       dropLng: dropoffCoords.lng,
       pickupAddress: pickupCoords.address,
       dropAddress: dropoffCoords.address,
-      fare,
-      distance,
-      duration,
+      fare: authFare,
+      distance: authDistance,
+      duration: authDuration,
       idempotencyKey,
+      fareBreakdown: quote.breakdown,
+      pricingVersion: quote.pricingVersion,
     });
     // If DB returned a different id (idempotency hit race), adopt it and skip Redis/ matching side-effects.
     if (dbRide && dbRide.id !== rideId) {
@@ -127,14 +154,14 @@ const createRideRequest = async (riderId, pickup, dropoff, fare, distance, durat
     dropLat: dropoffCoords.lat,
     dropLng: dropoffCoords.lng,
     dropAddress: dropoffCoords.address,
-    fare,
-    distance,
-    duration,
-    vehicleType,
+    fare: authFare,
+    distance: authDistance,
+    duration: authDuration,
+    vehicleType: quote.vehicleType,
     passengerName,
     passengerPhone,
   });
-  stage(correlationId, '3', 'ride_persisted', { rideId, riderId });
+  stage(correlationId, '3', 'ride_persisted', { rideId, riderId, authFare });
 
   stage(correlationId, '4', 'matching_started', { rideId });
   stage(correlationId, '5', 'driver_search_started', { rideId, vehicleType });
@@ -161,9 +188,9 @@ const createRideRequest = async (riderId, pickup, dropoff, fare, distance, durat
       riderId,
       pickup: pickupCoords,
       dropoff: dropoffCoords,
-      fare,
-      distance,
-      duration,
+      fare: authFare,
+      distance: authDistance,
+      duration: authDuration,
       passengerName,
       passengerPhone,
     });
@@ -181,7 +208,7 @@ const createRideRequest = async (riderId, pickup, dropoff, fare, distance, durat
     });
   }
 
-  return { rideId, candidateCount, passengerName, passengerPhone };
+  return { rideId, candidateCount, passengerName, passengerPhone, fare: authFare, distance: authDistance, duration: authDuration, fareBreakdown: quote.breakdown, pricingVersion: quote.pricingVersion, vehicleType: quote.vehicleType };
 };
 
 const acceptRide = (rideId, driverId) => persistAcceptance(rideId, driverId);
