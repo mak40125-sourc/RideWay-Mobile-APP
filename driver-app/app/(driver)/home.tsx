@@ -5,8 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
 import { useDriverStore } from '../../store/driverStore';
+import { locationService } from '../../services/locationService';
 import { useRideStore } from '../../store/rideStore';
 import { useWalletStore } from '../../store/walletStore';
 import { useDriverLocation } from '../../hooks/useDriverLocation';
@@ -28,6 +28,18 @@ import { diagLogger } from '../../utils/diagLog';
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BOTTOM_PANEL_HEIGHT = SCREEN_HEIGHT * 0.35;
 
+function isValidGpsCoords(lat: unknown, lng: unknown): boolean {
+  return (
+    typeof lat === 'number' &&
+    typeof lng === 'number' &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    (lat !== 0 || lng !== 0) &&
+    Math.abs(lat) <= 90 &&
+    Math.abs(lng) <= 180
+  );
+}
+
 export default function DriverHomeScreen() {
   const router = useRouter();
   const mapRef = useRef<MapView>(null);
@@ -40,12 +52,24 @@ export default function DriverHomeScreen() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const contentOffset = useSharedValue(0);
-  const [initialRegion] = useState({
-    latitude: 12.9716,
-    longitude: 77.5946,
-    latitudeDelta: 0.05,
-    longitudeDelta: 0.05,
+  // Map boot region: valid persisted driver location only (fast initial
+  // position while waiting for fresh GPS). Never a fabricated city.
+  // May be null when no valid location exists yet — the camera is then
+  // positioned once the first valid fix arrives (see auto-center effect).
+  const [bootRegion] = useState(() => {
+    const loc = useDriverStore.getState().location;
+    if (loc && isValidGpsCoords(loc.latitude, loc.longitude)) {
+      return {
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        latitudeDelta: 0.05,
+        longitudeDelta: 0.05,
+      };
+    }
+    return null;
   });
+  const mountTimeRef = useRef(Date.now());
+  const didAutoCenterRef = useRef(false);
 
   const fetchData = useCallback(() => {
     if (authState === 'BOOTSTRAPPING') return;
@@ -96,6 +120,72 @@ export default function DriverHomeScreen() {
       stopTracking();
     }
   }, [is_online, isTracking, startTracking, stopTracking]);
+
+  // Concern A: one-shot startup GPS for map initialization.
+  // Runs on mount independently of is_online. Continuous watch tracking
+  // when online (above) is a separate concern and is left unchanged.
+  useEffect(() => {
+    let cancelled = false;
+    diagLogger.log('HOME_LOCATION_STARTUP_BEGIN');
+    void (async () => {
+      try {
+        if (!(await locationService.isServiceEnabled())) {
+          diagLogger.log('HOME_LOCATION_STARTUP_SERVICES_DISABLED');
+          return;
+        }
+        if (cancelled) return;
+        const granted = await locationService.requestPermissions();
+        if (cancelled) return;
+        if (!granted) {
+          diagLogger.log('HOME_LOCATION_STARTUP_PERMISSION_DENIED');
+          return;
+        }
+        const pos = await locationService.getCurrentPosition();
+        if (cancelled) return;
+        const { latitude, longitude } = pos.coords;
+        if (!isValidGpsCoords(latitude, longitude)) {
+          diagLogger.log('HOME_LOCATION_STARTUP_GPS_INVALID');
+          return;
+        }
+        useDriverStore.getState().setLocation({
+          latitude,
+          longitude,
+          accuracy: pos.coords.accuracy ?? 0,
+          timestamp: Date.now(),
+          heading: pos.coords.heading != null && pos.coords.heading >= 0 ? pos.coords.heading : undefined,
+        });
+        diagLogger.log('HOME_LOCATION_STARTUP_GPS_READY', `lat=${latitude.toFixed(5)} lng=${longitude.toFixed(5)}`);
+      } catch (e) {
+        if (!cancelled) {
+          diagLogger.log('HOME_LOCATION_STARTUP_ERROR', e instanceof Error ? e.message : String(e));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // initialRegion is mount-time only, so a GPS fix arriving after mount
+  // needs one explicit camera move. This runs at most once: online watch
+  // updates must never fight the camera.
+  useEffect(() => {
+    if (didAutoCenterRef.current) return;
+    if (!driverLocation || !isValidGpsCoords(driverLocation.latitude, driverLocation.longitude)) return;
+    // Map already booted on the persisted fix; wait for a fresh fix.
+    if (bootRegion && driverLocation.timestamp <= mountTimeRef.current) return;
+    didAutoCenterRef.current = true;
+    mapRef.current?.animateToRegion(
+      {
+        latitude: driverLocation.latitude,
+        longitude: driverLocation.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      },
+      800
+    );
+    diagLogger.log('HOME_MAP_AUTO_CENTER', `lat=${driverLocation.latitude.toFixed(5)} lng=${driverLocation.longitude.toFixed(5)}`);
+  }, [driverLocation, bootRegion]);
 
   useRideListener();
 
@@ -149,23 +239,39 @@ export default function DriverHomeScreen() {
   }));
 
   const handleRecenter = useCallback(async () => {
-    let lat: number;
-    let lng: number;
-    if (driverLocation) {
-      lat = driverLocation.latitude;
-      lng = driverLocation.longitude;
-    } else {
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      lat = pos.coords.latitude;
-      lng = pos.coords.longitude;
+    try {
+      let lat: number;
+      let lng: number;
+      const stored = useDriverStore.getState().location;
+      if (stored && isValidGpsCoords(stored.latitude, stored.longitude)) {
+        lat = stored.latitude;
+        lng = stored.longitude;
+      } else {
+        // Retry live GPS (covers permission-denied-then-granted and
+        // temporarily-unavailable cases).
+        const pos = await locationService.getCurrentPosition();
+        if (!isValidGpsCoords(pos.coords.latitude, pos.coords.longitude)) return;
+        lat = pos.coords.latitude;
+        lng = pos.coords.longitude;
+        useDriverStore.getState().setLocation({
+          latitude: lat,
+          longitude: lng,
+          accuracy: pos.coords.accuracy ?? 0,
+          timestamp: Date.now(),
+          heading: pos.coords.heading != null && pos.coords.heading >= 0 ? pos.coords.heading : undefined,
+        });
+      }
+      didAutoCenterRef.current = true;
+      mapRef.current?.animateToRegion({
+        latitude: lat,
+        longitude: lng,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      }, 500);
+    } catch (e) {
+      diagLogger.log('HOME_RECENTER_ERROR', e instanceof Error ? e.message : String(e));
     }
-    mapRef.current?.animateToRegion({
-      latitude: lat,
-      longitude: lng,
-      latitudeDelta: 0.01,
-      longitudeDelta: 0.01,
-    }, 500);
-  }, [driverLocation]);
+  }, []);
 
   useEffect(() => {
     contentOffset.value = withTiming(isMenuOpen ? 60 : 0, {
@@ -209,7 +315,7 @@ export default function DriverHomeScreen() {
             showsUserLocation
             showsMyLocationButton={false}
             mapPadding={{ top: insets.top, right: 0, bottom: 0, left: 0 }}
-            initialRegion={initialRegion}
+            initialRegion={bootRegion ?? undefined}
           />
 
           <View style={styles.bottomPanel}>

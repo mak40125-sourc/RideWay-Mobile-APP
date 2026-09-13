@@ -14,13 +14,14 @@ const { width, height } = Dimensions.get('window');
 function getCoords(loc: any) {
   if (loc?.latitude != null) return { latitude: loc.latitude, longitude: loc.longitude };
   if (loc?.lat != null) return { latitude: loc.lat, longitude: loc.lng };
-  return { latitude: 12.9716, longitude: 77.5946 };
+  return null;
 }
 
 function addressOf(loc: any, fallbackAddress?: string | null): string {
   if (loc?.address) return loc.address;
   if (fallbackAddress) return fallbackAddress;
   const coords = getCoords(loc);
+  if (!coords) return 'Location unavailable';
   return `${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}`;
 }
 
@@ -36,6 +37,9 @@ export default function RideProgressScreen() {
   const dropAddress = addressOf(drop, current_ride?.drop_address);
   const pickupAddress = addressOf(pickup, current_ride?.pickup_address);
   const rideId = current_ride?.id;
+  const pickupCoords = getCoords(pickup);
+  const dropCoords = getCoords(drop);
+  const mapFocus = pickupCoords ?? dropCoords;
 
   const handleStartRide = async () => {
     if (!rideId || starting) return;
@@ -52,22 +56,26 @@ export default function RideProgressScreen() {
 
   return (
     <View style={styles.container}>
-      <MapView
-        style={styles.map}
-        provider={PROVIDER_GOOGLE}
-        showsUserLocation
-        showsMyLocationButton={false}
-        showsCompass={false}
-        initialRegion={{
-          latitude: getCoords(pickup).latitude,
-          longitude: getCoords(pickup).longitude,
-          latitudeDelta: 0.02,
-          longitudeDelta: 0.02,
-        }}
-      >
-        {pickup && <Marker coordinate={getCoords(pickup)} title="Pickup" pinColor={velosColors.green} />}
-        {drop && <Marker coordinate={getCoords(drop)} title="Drop" pinColor={velosColors.dropOrange} />}
-      </MapView>
+      {mapFocus ? (
+        <MapView
+          style={styles.map}
+          provider={PROVIDER_GOOGLE}
+          showsUserLocation
+          showsMyLocationButton={false}
+          showsCompass={false}
+          initialRegion={{
+            latitude: mapFocus.latitude,
+            longitude: mapFocus.longitude,
+            latitudeDelta: 0.02,
+            longitudeDelta: 0.02,
+          }}
+        >
+          {pickupCoords && <Marker coordinate={pickupCoords} title="Pickup" pinColor={velosColors.green} />}
+          {dropCoords && <Marker coordinate={dropCoords} title="Drop" pinColor={velosColors.dropOrange} />}
+        </MapView>
+      ) : (
+        <View style={styles.map} />
+      )}
 
       <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 20) + 12 }]}>
         <View style={styles.handle} />

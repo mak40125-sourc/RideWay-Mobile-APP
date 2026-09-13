@@ -45,6 +45,12 @@
       "expo-font",
       "expo-secure-store",
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "RideWay needs your location to show your position on the map and match you with nearby ride requests."
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "RideWay needs access to your photos to upload documents."
