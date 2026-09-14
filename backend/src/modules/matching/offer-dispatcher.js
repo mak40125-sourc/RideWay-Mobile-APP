@@ -3,8 +3,11 @@ const redisService = require('../../core/redis/redis.service');
 const { NOTIFICATION_EVENT } = require('./matching.constants');
 const { logger, currentCorrelationId } = require('../../core/logger/logger');
 
-// Queues the ranked candidates for a ride and pushes a notification to them.
-const dispatchOffers = async (rideId, { candidateIds, riderId, pickup, dropoff, fare, distance, duration, passengerName, passengerPhone }) => {
+// Queues the drivers for a ride and pushes a notification to them. In wave
+// mode the caller passes only the current wave's drivers as candidateIds plus
+// their individual offerExpiresAt; without them this falls back to the legacy
+// single-broadcast shape (global request TTL, no wave number).
+const dispatchOffers = async (rideId, { candidateIds, riderId, pickup, dropoff, fare, distance, duration, passengerName, passengerPhone, offerExpiresAt, waveNumber }) => {
   const correlationId = currentCorrelationId();
 
   await matchingRepository.addDriversToQueue(rideId, candidateIds);
@@ -30,13 +33,29 @@ const dispatchOffers = async (rideId, { candidateIds, riderId, pickup, dropoff, 
     // a normal ride so the driver UI falls back to the booking rider.
     passengerName: passengerName || null,
     passengerPhone: passengerPhone || null,
-    // Authoritative offer deadline so driver clients can run a real countdown
-    // against the same TTL the backend enforces on the ride:request buffer.
-    expiresAt: Date.now() + redisService.RIDE_REQUEST_TTL * 1000,
+    // Authoritative per-driver offer deadline (wave mode) so driver clients
+    // can run a display-only countdown. Falls back to the global request TTL
+    // for legacy callers. The backend always re-validates against Redis.
+    expiresAt: offerExpiresAt || Date.now() + redisService.RIDE_REQUEST_TTL * 1000,
     candidateDriverIds: candidateIds,
+    ...(waveNumber ? { waveNumber } : {}),
   };
 
   await matchingRepository.publishNotification(NOTIFICATION_EVENT, message);
 };
 
-module.exports = { dispatchOffers };
+// Explicit UX-sync cancellation for outstanding wave offers after a winner.
+// Late accepts stay rejected by the Redis lock + Postgres transition; this
+// event only tells the driver app to close the stale offer immediately.
+const dispatchOfferCancelled = async (rideId, { cancelledDriverIds, reason = 'driver_assigned', winnerDriverId, correlationId }) => {
+  await matchingRepository.publishNotification(NOTIFICATION_EVENT, {
+    type: 'offer_cancelled',
+    correlationId: correlationId || currentCorrelationId(),
+    rideId,
+    reason,
+    winnerDriverId: winnerDriverId || null,
+    cancelledDriverIds,
+  });
+};
+
+module.exports = { dispatchOffers, dispatchOfferCancelled };

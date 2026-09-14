@@ -43,7 +43,8 @@ export interface RideRequest {
   passengerName?: string | null;
   passengerPhone?: string | null;
   /**
-   * Epoch ms at which the backend offer expires (ride:request Redis TTL).
+   * Epoch ms at which this driver's individual offer expires (10s wave offer,
+   * server-authoritative). Display-only: the backend re-validates on accept.
    * Null when the connected backend predates the field; the UI falls back to
    * a local window instead of displaying a fabricated deadline.
    */

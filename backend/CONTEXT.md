@@ -172,6 +172,21 @@ Future (later phases): `shared/`, `workers/`, and modules for `auth`, `rider`,
 - Flow: `Ride Controller → Ride Service → Matching Service → Repositories →
   Redis/Supabase`. Wallet module untouched.
 
+**Phase 4: Wave dispatch (2-driver waves + 10s individual offers) — COMPLETE**
+
+- Offer policy changed from broadcast-to-all to max-2-driver waves in
+  nearest-first order (`wave-dispatcher.js`: `createWaves`/`startWaves`/
+  `dispatchWave`/`advanceWaveIfNeeded`/`cancelWaveOffers`). Discovery, radius
+  (3000m), vehicle_type filter, ranking (identity), pricing, state machine,
+  Redis lock + `accept_ride_atomic` acceptance authority all unchanged.
+- Per-driver 10s offer state in Redis (`ride:wave:<id>`, `ride:offer:<id>`,
+  same 120s TTL as `ride:request:<id>` which remains the global lifetime).
+  Server re-validates offer + buffer on accept; client countdown display-only.
+- New `POST /rides/:rideId/reject` (decline = offer inactive, never cancels
+  the ride) and `ride:offer_cancelled` socket event to `driver:<id>` rooms;
+  `ride:request` still carries the per-wave driver subset. Tests:
+  `test/wave-dispatcher.test.js` (10 tests).
+
 ---
 
 ## Constraints

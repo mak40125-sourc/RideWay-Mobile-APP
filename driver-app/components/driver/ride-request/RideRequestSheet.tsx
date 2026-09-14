@@ -31,9 +31,9 @@ import { RouteCard } from './RouteCard';
 import { RiderCard } from './RiderCard';
 import { VehiclePaymentRow } from './VehiclePaymentRow';
 
-// Mirrors the backend ride:request Redis TTL; only used when the connected
-// backend predates the expiresAt payload field.
-const FALLBACK_OFFER_WINDOW_MS = 120_000;
+// Individual wave-offer window (10s, server-authoritative); only used when
+// the connected backend predates the expiresAt payload field.
+const FALLBACK_OFFER_WINDOW_MS = 10_000;
 const URGENT_THRESHOLD_S = 10;
 
 const ENTER_MS = 340;
@@ -136,6 +136,12 @@ export const RideRequestSheet = ({ request }: Props) => {
     if (settledRef.current || acceptingRef.current || exitingRef.current) return;
     settledRef.current = true;
     diagLogger.log('RIDE_DECLINE', `rideId=${request.rideId}`);
+    // Tell the backend this offer is unwanted (never cancels the ride).
+    // Fire-and-forget: dismissal is local and immediate either way.
+    rideAPI.rejectRide(request.rideId).then(
+      () => diagLogger.log('RIDE_DECLINE_OK', `rideId=${request.rideId}`),
+      (err) => diagLogger.log('RIDE_DECLINE_ERROR', `rideId=${request.rideId} ${err instanceof Error ? err.message : String(err)}`)
+    );
     beginExit();
   }, [beginExit, request.rideId]);
 
@@ -165,7 +171,8 @@ export const RideRequestSheet = ({ request }: Props) => {
       if (
         status === 400 ||
         status === 409 ||
-        /already|no longer|assigned|accepted|taken/i.test(message)
+        status === 410 ||
+        /already|no longer|assigned|accepted|taken|expired|cancelled|declined|no active offer/i.test(message)
       ) {
         // The ride found another driver — dismiss without blaming the network.
         settledRef.current = true;

@@ -48,6 +48,18 @@ exports.acceptRide = async (req, res) => {
   }
 };
 
+exports.rejectRide = async (req, res) => {
+  try {
+    const { rideId } = req.params;
+    const driverId = req.user.id;
+    const result = await rideService.rejectRide(rideId, driverId);
+    res.status(200).json(result);
+  } catch (error) {
+    const status = error.status || 400;
+    res.status(status).json({ error: error.message });
+  }
+};
+
 exports.updateRideStatus = async (req, res) => {
   const { rideId } = req.params;
   const { status } = req.body;

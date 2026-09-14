@@ -128,6 +128,7 @@ const getRiderRideHistory = (riderId) => rideRepository.getRiderRideHistory(ride
 module.exports = {
   createRideRequest: matchingService.createRideRequest,
   acceptRide: matchingService.acceptRide,
+  rejectRide: matchingService.rejectRide,
   getRide,
   updateRideStatus,
   completeRide,

@@ -23,8 +23,7 @@ export const useRideListener = (options?: UseRideListenerOptions) => {
   });
 
   useWebSocket({
-    onRideRequest: (request) => {
-      const { is_online, status, driver } = gateRef.current;
+    onRideRequest: (request) => {      const { is_online, status, driver } = gateRef.current;
       const online = is_online;
       const stat = status;
       const hasDriver = !!driver;
@@ -37,6 +36,15 @@ export const useRideListener = (options?: UseRideListenerOptions) => {
           'RIDE_REQUEST_DROPPED',
           `rideId=${request.rideId} online=${online} status=${stat} driver=${hasDriver} reason=gate-failed`
         );
+      }
+    },
+    onOfferCancelled: ({ rideId, reason }) => {
+      // Another driver won this ride — immediately close the stale offer.
+      // The backend already rejected any late accept; this is UX sync only.
+      const current = useRideStore.getState().current_request;
+      if (current && current.rideId === rideId) {
+        diagLogger.log('RIDE_OFFER_CANCELLED', `rideId=${rideId} reason=${reason}`);
+        setCurrentRequest(null);
       }
     },
   });

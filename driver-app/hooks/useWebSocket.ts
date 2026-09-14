@@ -7,6 +7,7 @@ import type { RideRequest } from '../types/ride';
 
 interface UseWebSocketCallbacks {
   onRideRequest: (request: RideRequest) => void;
+  onOfferCancelled?: (cancelled: { rideId: string; reason: string }) => void;
 }
 
 export function useWebSocket(callbacks: UseWebSocketCallbacks) {
@@ -61,6 +62,19 @@ export function useWebSocket(callbacks: UseWebSocketCallbacks) {
           expiresAt: typeof data.expiresAt === 'number' ? data.expiresAt : null,
         };
         callbacks.onRideRequest(request);
+      });
+
+      // Wave cancellation: another driver won — close the stale offer now.
+      // Late accepts stay rejected server-side; this is UX/state sync only.
+      socket.on('ride:offer_cancelled', (data: any) => {
+        if (!mounted) return;
+        diagLogger.log(
+          'SOCKET_EVENT_OFFER_CANCELLED',
+          `rideId=${data?.rideId} reason=${data?.reason}`
+        );
+        if (typeof data?.rideId === 'string') {
+          callbacks.onOfferCancelled?.({ rideId: data.rideId, reason: data.reason ?? 'driver_assigned' });
+        }
       });
 
       socket.on('disconnect', (reason) => {

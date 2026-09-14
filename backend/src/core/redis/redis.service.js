@@ -203,6 +203,139 @@ const redisService = {
     await client.del(`ride:offers:${rideId}`);
   },
 
+  // ── Wave / Offer State (2-driver waves + 10s individual timers) ──
+  // Single source of truth for wave progression lives in two hashes:
+  //   ride:wave:<rideId>  — { waveNumber, status, waveDriverIds[], candidateIds[], candidateIndex }
+  //   ride:offer:<rideId> — field per driverId → { waveNumber, status, createdAt, expiresAt, candidatePosition }
+  // Offer status: active | rejected | expired | accepted | cancelled. Both keys
+  // carry the global 120s TTL so wave state can never outlive the ride request.
+  setWaveState: async (rideId, state) => {
+    const key = `ride:wave:${rideId}`;
+    await client.hset(key, {
+      waveNumber: String(state.waveNumber),
+      status: state.status || 'active',
+      waveDriverIds: JSON.stringify(state.waveDriverIds || []),
+      candidateIds: JSON.stringify(state.candidateIds || []),
+      candidateIndex: String(state.candidateIndex ?? 0),
+      updatedAt: String(Date.now()),
+    });
+    await client.expire(key, RIDE_REQUEST_TTL);
+  },
+
+  getWaveState: async (rideId) => {
+    const key = `ride:wave:${rideId}`;
+    const data = await client.hgetall(key);
+    if (!data || Object.keys(data).length === 0) return null;
+    let waveDriverIds = [];
+    let candidateIds = [];
+    try { waveDriverIds = JSON.parse(data.waveDriverIds || '[]'); } catch { waveDriverIds = []; }
+    try { candidateIds = JSON.parse(data.candidateIds || '[]'); } catch { candidateIds = []; }
+    return {
+      waveNumber: Number(data.waveNumber || 1),
+      status: data.status || 'active',
+      waveDriverIds,
+      candidateIds,
+      candidateIndex: Number(data.candidateIndex || 0),
+      updatedAt: Number(data.updatedAt || 0),
+    };
+  },
+
+  deleteWaveState: async (rideId) => {
+    await client.del(`ride:wave:${rideId}`);
+  },
+
+  // ── Wave transition guard (duplicate-dispatch protection) ──
+  // Atomic single-claim per (rideId, fromWave → toWave): only the first
+  // caller wins and proceeds to dispatch; concurrent advancers (two
+  // rejects, reject + timer, two processes) lose and must exit without
+  // dispatching. SET NX is atomic, so simultaneous callers cannot both win.
+  // One key per transition, so wave 1→2 never blocks a later wave 2→3.
+  // Bounded TTL (same 120s as all matching scratch state) so a crashed
+  // process can never block wave progression permanently.
+  claimWaveTransition: async (rideId, fromWaveNumber, toWaveNumber, ttl = RIDE_REQUEST_TTL) => {
+    const key = `ride:wave:transition:${rideId}:${fromWaveNumber}:${toWaveNumber}`;
+    const acquired = await client.set(key, String(Date.now()), 'NX', 'EX', ttl);
+    logger.info({
+      type: 'redis',
+      event: acquired !== null ? 'wave_transition_claimed' : 'wave_transition_contended',
+      correlationId: currentCorrelationId(),
+      rideId,
+      key,
+    });
+    return acquired !== null;
+  },
+
+  setDriverOffers: async (rideId, offers) => {
+    if (!offers || offers.length === 0) return;
+    const key = `ride:offer:${rideId}`;
+    const pipeline = client.pipeline();
+    for (const o of offers) {
+      pipeline.hset(key, o.driverId, JSON.stringify({
+        waveNumber: o.waveNumber,
+        status: o.status || 'active',
+        createdAt: o.createdAt,
+        expiresAt: o.expiresAt,
+        candidatePosition: o.candidatePosition ?? null,
+      }));
+    }
+    await pipeline.exec();
+    await client.expire(key, RIDE_REQUEST_TTL);
+  },
+
+  getDriverOffers: async (rideId) => {
+    const key = `ride:offer:${rideId}`;
+    const data = await client.hgetall(key);
+    if (!data || Object.keys(data).length === 0) return {};
+    const out = {};
+    for (const [driverId, raw] of Object.entries(data)) {
+      try {
+        out[driverId] = JSON.parse(raw);
+      } catch {
+        // ignore corrupt fields
+      }
+    }
+    return out;
+  },
+
+  getDriverOffer: async (rideId, driverId) => {
+    const key = `ride:offer:${rideId}`;
+    const raw = await client.hget(key, driverId);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  },
+
+  updateOfferStatus: async (rideId, driverId, status) => {
+    const key = `ride:offer:${rideId}`;
+    const raw = await client.hget(key, driverId);
+    if (!raw) return null;
+    let offer;
+    try {
+      offer = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+    offer.status = status;
+    offer.updatedAt = Date.now();
+    await client.hset(key, driverId, JSON.stringify(offer));
+    return offer;
+  },
+
+  deleteOfferState: async (rideId) => {
+    await client.del(`ride:offer:${rideId}`);
+  },
+
+  getRideRequestTtl: async (rideId) => {
+    try {
+      return await client.ttl(`ride:request:${rideId}`);
+    } catch {
+      return -2;
+    }
+  },
+
   // ── Distributed Lock ─────────────────────────────────────────────
   acquireRideLock: async (rideId, driverId, ttl = 10) => {
     const acquired = await client.set(

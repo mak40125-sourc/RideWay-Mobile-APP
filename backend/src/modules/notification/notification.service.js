@@ -4,6 +4,23 @@ const { logger } = require('../../core/logger/logger');
 
 function initNotificationService() {
   redisService.subscribeToNotifications('ride:notifications', (notification) => {
+    const io = getIO();
+
+    // Wave cancellation fan-out: tell stale offerees to close the offer now.
+    // Late accepts stay rejected server-side; this event is UX/state sync.
+    if (notification && notification.type === 'offer_cancelled') {
+      const { cancelledDriverIds, correlationId, rideId, reason } = notification;
+      if (!cancelledDriverIds || !Array.isArray(cancelledDriverIds)) {
+        logger.warn({ type: 'notification', event: 'cancel_skipped', correlationId, reason: 'no cancelledDriverIds' });
+        return;
+      }
+      for (const driverId of cancelledDriverIds) {
+        io.to(`driver:${driverId}`).emit('ride:offer_cancelled', { rideId, reason: reason || 'driver_assigned' });
+        logger.info({ type: 'socket', event: 'ride:offer_cancelled_emitted', correlationId, rideId, driverId });
+      }
+      return;
+    }
+
     // correlationId is carried through the internal Redis payload for tracing;
     // strip it so the public Socket.IO event payload is unchanged.
     const { candidateDriverIds, correlationId, ...rideInfo } = notification;
@@ -12,7 +29,6 @@ function initNotificationService() {
       return;
     }
 
-    const io = getIO();
     for (const driverId of candidateDriverIds) {
       const room = `driver:${driverId}`;
       const roomSockets = io.of('/').adapter.rooms.get(room);

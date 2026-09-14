@@ -8,6 +8,7 @@ router.get('/driver/active', protect, rideController.getDriverActiveRide);
 router.post('/estimate', protect, rideController.estimateFare);
 router.post('/request', protect, rideController.requestRide);
 router.post('/:rideId/accept', protect, rideController.acceptRide);
+router.post('/:rideId/reject', protect, rideController.rejectRide);
 router.put('/:rideId/status', protect, rideController.updateRideStatus);
 router.get('/:rideId', protect, rideController.getRide);
 router.post('/:rideId/complete', protect, rideController.completeRide);

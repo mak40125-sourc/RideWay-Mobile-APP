@@ -2,8 +2,8 @@ const crypto = require('crypto');
 const matchingRepository = require('./matching.repository');
 const { findCandidates } = require('./candidate-finder');
 const { rankCandidates } = require('./candidate-ranker');
-const { dispatchOffers } = require('./offer-dispatcher');
-const { acceptRide: persistAcceptance } = require('./acceptance-manager');
+const { startWaves } = require('./wave-dispatcher');
+const { acceptRide: persistAcceptance, rejectRide: persistRejection } = require('./acceptance-manager');
 const { logger, stage, track, currentCorrelationId } = require('../../core/logger/logger');
 
 // Orchestrates the ride-matching pipeline. Business logic only — all
@@ -183,8 +183,12 @@ const createRideRequest = async (riderId, pickup, dropoff, fare, distance, durat
 
   if (rankedCandidates.length > 0) {
     stage(correlationId, '8', 'offer_generated', { rideId, candidateCount });
-    await dispatchOffers(rideId, {
-      candidateIds,
+    // Wave discovery: nearest-first order untouched, max 2 drivers active at
+    // a time with individual 10s offers. Only wave 1 dispatches here; later
+    // waves follow automatically once the current wave is fully inactive.
+    const waveCandidateIds = rankedCandidates.map((d) => d.user_id);
+    const { waveCount } = await startWaves(rideId, waveCandidateIds, {
+      correlationId,
       riderId,
       pickup: pickupCoords,
       dropoff: dropoffCoords,
@@ -194,6 +198,7 @@ const createRideRequest = async (riderId, pickup, dropoff, fare, distance, durat
       passengerName,
       passengerPhone,
     });
+    stage(correlationId, '8', 'waves_started', { rideId, candidateCount, waveCount });
   } else {
     logger.warn({
       type: 'stage',
@@ -213,4 +218,6 @@ const createRideRequest = async (riderId, pickup, dropoff, fare, distance, durat
 
 const acceptRide = (rideId, driverId) => persistAcceptance(rideId, driverId);
 
-module.exports = { createRideRequest, acceptRide };
+const rejectRide = (rideId, driverId) => persistRejection(rideId, driverId);
+
+module.exports = { createRideRequest, acceptRide, rejectRide };

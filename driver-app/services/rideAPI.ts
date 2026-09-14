@@ -57,6 +57,13 @@ export const rideAPI = {
     return transformRide(raw);
   },
 
+  // Explicit decline of a wave offer. Never cancels the ride itself; the
+  // backend marks this driver's offer inactive and advances the wave when
+  // no active offers remain. Idempotent — safe to retry.
+  rejectRide: async (rideId: string): Promise<void> => {
+    await api.post<any>(`/rides/${rideId}/reject`, {});
+  },
+
   updateRideStatus: async (rideId: string, status: string): Promise<Ride> => {
     const raw = await api.put<any>(`/rides/${rideId}/status`, { status });
     return transformRide(raw);

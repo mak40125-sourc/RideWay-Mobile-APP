@@ -41,6 +41,31 @@ exports.addDriversToQueue = (rideId, driverIds) => redisService.addDriversToQueu
 
 exports.deleteQueue = (rideId) => redisService.deleteQueue(rideId);
 
+// ── Redis: wave / offer state (2-driver waves + individual timers) ──
+exports.setWaveState = (rideId, state) => redisService.setWaveState(rideId, state);
+
+exports.getWaveState = (rideId) => redisService.getWaveState(rideId);
+
+exports.deleteWaveState = (rideId) => redisService.deleteWaveState(rideId);
+
+// Atomic single-claim for one wave transition (rideId, fromWave → toWave).
+// Only the winner dispatches; losers exit without side effects.
+exports.claimWaveTransition = (rideId, fromWaveNumber, toWaveNumber) =>
+  redisService.claimWaveTransition(rideId, fromWaveNumber, toWaveNumber);
+
+exports.setDriverOffers = (rideId, offers) => redisService.setDriverOffers(rideId, offers);
+
+exports.getDriverOffers = (rideId) => redisService.getDriverOffers(rideId);
+
+exports.getDriverOffer = (rideId, driverId) => redisService.getDriverOffer(rideId, driverId);
+
+exports.updateOfferStatus = (rideId, driverId, status) =>
+  redisService.updateOfferStatus(rideId, driverId, status);
+
+exports.deleteOfferState = (rideId) => redisService.deleteOfferState(rideId);
+
+exports.getRideRequestTtl = (rideId) => redisService.getRideRequestTtl(rideId);
+
 // ── Redis: distributed lock ───────────────────────────────────────
 exports.acquireRideLock = (rideId, driverId, ttl) =>
   redisService.acquireRideLock(rideId, driverId, ttl);
