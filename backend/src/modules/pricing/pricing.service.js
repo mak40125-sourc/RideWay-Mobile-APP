@@ -64,6 +64,48 @@ async function resolveRoute(pickup, dropoff) {
   }
 }
 
+async function getRoute(pickupRaw, dropoffRaw) {
+  const pickup = validateCoords(pickupRaw, 'pickup');
+  const dropoff = validateCoords(dropoffRaw, 'dropoff');
+  const url = `${OSRM_BASE_URL}/route/v1/driving/${pickup.lng},${pickup.lat};${dropoff.lng},${dropoff.lat}?overview=full&geometries=geojson`;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), OSRM_TIMEOUT_MS);
+    let res;
+    try {
+      res = await fetch(url, { signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (!res.ok) throw new Error(`OSRM ${res.status}`);
+    const data = await res.json();
+    const route = data.routes && data.routes[0];
+    if (!route || !Number.isFinite(route.distance) || !Number.isFinite(route.duration)) {
+      throw new Error('No route');
+    }
+    const coords = route.geometry && route.geometry.coordinates;
+    const path = Array.isArray(coords) && coords.length
+      ? coords.map(([lng, lat]) => ({ latitude: lat, longitude: lng }))
+      : [ { latitude: pickup.lat, longitude: pickup.lng }, { latitude: dropoff.lat, longitude: dropoff.lng } ];
+    return {
+      distanceKm: Number((route.distance / 1000).toFixed(1)),
+      durationMin: Math.max(1, Math.round(route.duration / 60)),
+      path,
+      source: 'osrm',
+    };
+  } catch (err) {
+    const distanceKm = Number(haversineKm(pickup, dropoff).toFixed(1));
+    const durationMin = Math.max(1, Math.round((distanceKm / 30) * 60));
+    logger.warn({ type: 'pricing', event: 'route_geometry_fallback', reason: err.message, distanceKm, durationMin });
+    return {
+      distanceKm,
+      durationMin,
+      path: [ { latitude: pickup.lat, longitude: pickup.lng }, { latitude: dropoff.lat, longitude: dropoff.lng } ],
+      source: 'haversine-fallback',
+    };
+  }
+}
+
 function calculateFare(vehicleType, distanceKm, durationMin) {
   const rate = RATES[vehicleType];
   const distanceFare = distanceKm * rate.perKm;
@@ -89,4 +131,4 @@ const quoteFare = async (pickupRaw, dropoffRaw, vehicleTypeRaw) => {
   return { ...quote, routeSource: route.source };
 };
 
-module.exports = { PRICING_VERSION, CURRENCY, RATES, MIN_FARE, normalizeVehicleType, validateCoords, resolveRoute, calculateFare, quoteFare };
+module.exports = { PRICING_VERSION, CURRENCY, RATES, MIN_FARE, normalizeVehicleType, validateCoords, resolveRoute, calculateFare, quoteFare, getRoute };

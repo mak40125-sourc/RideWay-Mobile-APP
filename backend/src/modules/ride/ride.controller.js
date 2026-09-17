@@ -13,6 +13,19 @@ exports.estimateFare = async (req, res) => {
   }
 };
 
+exports.getRoute = async (req, res) => {
+  try {
+    const { pickup, dropoff } = req.body;
+    if (!pickup || !dropoff) {
+      return res.status(422).json({ error: 'pickup and dropoff are required' });
+    }
+    const route = await rideService.getRoute(pickup, dropoff);
+    res.status(200).json(route);
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
 exports.requestRide = async (req, res) => {
   try {
     const idempotencyKey = req.headers['x-idempotency-key'] || req.headers['idempotency-key'] || req.body.idempotencyKey || null;

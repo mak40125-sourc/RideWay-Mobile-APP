@@ -12,6 +12,11 @@ const estimateFare = async (pickup, dropoff, vehicleType) => {
   return pricingService.quoteFare(pickup, dropoff, vehicleType);
 };
 
+const getRoute = async (pickup, dropoff) => {
+  const { pricingService } = require('../pricing');
+  return pricingService.getRoute(pickup, dropoff);
+};
+
 const updateRideStatus = async (rideId, driverId, status) => {
   const ts = new Date().toISOString();
   // eslint-disable-next-line no-console
@@ -137,4 +142,5 @@ module.exports = {
   getDriverActiveRide,
   getRiderRideHistory,
   estimateFare,
+  getRoute,
 };
